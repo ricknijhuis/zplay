@@ -1,0 +1,7 @@
+.{
+    .name = .zplay,
+    .version = "0.0.1",
+    .minimum_zig_version = "0.16.0-dev.747+493ad58ff",
+    .paths = .{""},
+    .fingerprint = 0xa8d0ed560e9e89a,
+}
