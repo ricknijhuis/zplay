@@ -24,6 +24,12 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    if (target.result.os.tag == .windows) {
+        if (b.lazyDependency("win32", .{})) |win32_dep| {
+            modules_mod.addImport("win32", win32_dep.module("win32"));
+        }
+    }
+
     const zplay_mod = b.addModule("zplay", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,

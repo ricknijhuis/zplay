@@ -4,4 +4,12 @@
     .minimum_zig_version = "0.16.0-dev.747+493ad58ff",
     .paths = .{""},
     .fingerprint = 0xa8d0ed560e9e89a,
+    .dependencies = .{
+        .win32 = .{
+            .url = "https://github.com/marlersoft/zigwin32/archive/main.tar.gz",
+            .hash = "zigwin32-25.0.28-preview-AAAAAICM5AMResOGQnQ85mfe60TTOQeMtt7GRATUOKoP",
+            // Only needed for windows
+            .lazy = true,
+        },
+    },
 }
