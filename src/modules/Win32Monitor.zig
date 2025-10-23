@@ -98,7 +98,7 @@ pub fn poll() !void {
             }
 
             // The monitor already existed, skip adding a new one
-            if (i < instance.monitors.count)
+            if (instance.monitors.count < i)
                 continue;
 
             const new_monitor_handle = try instance.monitors.addOne(instance.gpa);
@@ -110,6 +110,8 @@ pub fn poll() !void {
 
             const utf16_name: [:0]const u16 = std.mem.span(@as([*:0]u16, @ptrCast(&device.DeviceString)));
             const utf8_name = try utf16ToUtf8(instance.gpa, utf16_name);
+            defer instance.gpa.free(utf8_name);
+
             const name = try instance.strings.getOrPut(instance.gpa, utf8_name);
             new_monitor.name = name;
             new_monitor.connected = true;
