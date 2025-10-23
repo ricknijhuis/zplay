@@ -1,12 +1,15 @@
 const builtin = @import("builtin");
 const core = @import("core");
 
-const Context = @import("Context.zig");
+const context = @import("context.zig");
 const Win32Window = @import("Win32Window.zig");
+const Window = @import("Window.zig");
 const HandleSet = core.HandleSet;
 const Handle = HandleSet(Window).Handle;
 
 const WindowHandle = @This();
+
+const instance = &context.instance;
 
 pub const ModeType = enum {
     windowed,
@@ -34,33 +37,16 @@ pub const InitParams = struct {
     height: u32,
 };
 
-const Native = union(enum) {
-    win32: Win32Window,
-};
-
-/// Represents a window
-/// Should only be used internally, to access properties use 'WindowHandle' functions
-pub const Window = struct {
-    handle: Native,
-    mode: Mode,
-    title: []const u8,
-    width: u32,
-    height: u32,
-    should_close: bool,
-};
-
-pub var windows: HandleSet(Window) = .empty;
-
 handle: Handle = .none,
 
 pub fn init(params: InitParams) !WindowHandle {
-    core.asserts.isOnThread(Context.instance.main_thread_id);
+    core.asserts.isOnThread(instance.main_thread);
 
-    const gpa = Context.instance.gpa;
-    const handle = try windows.addOneExact(gpa);
-    const window = windows.getPtr(handle);
+    const gpa = instance.gpa;
+    const handle = try instance.windows.addOneExact(gpa);
+    const window = instance.windows.getPtr(handle);
 
-    const native: Native = blk: {
+    const native: Window.Native = blk: {
         if (comptime builtin.os.tag == .windows) {
             break :blk .{ .win32 = try .init(.{ .handle = handle }, params) };
         }
@@ -72,7 +58,6 @@ pub fn init(params: InitParams) !WindowHandle {
 
     window.* = .{
         .handle = native,
-        .mode = params.mode,
         .title = params.title,
         .width = params.width,
         .height = params.height,
@@ -85,9 +70,9 @@ pub fn init(params: InitParams) !WindowHandle {
 }
 
 pub fn deinit(self: WindowHandle) void {
-    core.asserts.isOnThread(Context.instance.main_thread_id);
+    core.asserts.isOnThread(instance.main_thread);
 
-    const window = windows.getPtr(self.handle);
+    const window = instance.windows.getPtr(self.handle);
 
     switch (window.handle) {
         inline else => |*platform| {
@@ -95,19 +80,15 @@ pub fn deinit(self: WindowHandle) void {
         },
     }
 
-    windows.swapRemove(self.handle);
-
-    if (windows.count == 0) {
-        windows.deinit(Context.instance.gpa);
-    }
+    instance.windows.swapRemove(self.handle);
 }
 
 pub fn shouldClose(self: WindowHandle) bool {
-    return windows.getPtr(self.handle).should_close;
+    return instance.windows.getPtr(self.handle).should_close;
 }
 
 pub fn getSize(self: WindowHandle) core.Vec2u32 {
-    const window = windows.getPtr(self.handle);
+    const window = instance.windows.getPtr(self.handle);
     return .init(window.width, window.height);
 }
 

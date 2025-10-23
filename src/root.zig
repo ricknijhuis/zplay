@@ -32,8 +32,8 @@ pub const Mouse = void;
 pub const Controller = void;
 pub const Time = void;
 
-pub const init = mods.Context.init;
-pub const deinit = mods.Context.deinit;
+pub const init = mods.context.init;
+pub const deinit = mods.context.deinit;
 
 test {
     @import("std").testing.refAllDeclsRecursive(@This());

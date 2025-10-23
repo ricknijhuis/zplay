@@ -5,7 +5,6 @@ const debug = std.debug;
 const utf8ToUtf16Lit = std.unicode.utf8ToUtf16LeStringLiteral;
 const utf8ToUtf16 = std.unicode.utf8ToUtf16LeAllocZ;
 
-const Context = @import("Context.zig");
 const WindowHandle = @import("WindowHandle.zig");
 const Win32WMonitor = @import("Win32Monitor.zig");
 const InitParams = WindowHandle.InitParams;
@@ -13,14 +12,15 @@ const Mode = WindowHandle.Mode;
 
 const Win32Window = @This();
 
+const instance = &@import("context.zig").instance;
 const atom_name = utf8ToUtf16Lit("zplay");
 
 window: c.HWND,
 
 pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
-    const gpa = Context.instance.gpa;
+    const gpa = instance.gpa;
 
-    const instance: c.HINSTANCE = blk: {
+    const h_instance: c.HINSTANCE = blk: {
         if (c.GetModuleHandleW(null)) |value| {
             break :blk value;
         } else {
@@ -39,7 +39,7 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
                 .OWNDC = 1,
             },
             .lpfnWndProc = windowProcedure,
-            .hInstance = instance,
+            .hInstance = h_instance,
             .hIcon = c.LoadIconW(null, c.IDI_APPLICATION),
             .hCursor = c.LoadCursorW(null, c.IDC_ARROW),
             .lpszClassName = atom_name,
@@ -86,7 +86,7 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
         window_rect.bottom - window_rect.top,
         null,
         null,
-        instance,
+        h_instance,
         null,
     );
 
@@ -184,7 +184,7 @@ fn windowProcedure(hwnd: c.HWND, u_msg: u32, w_param: c.WPARAM, l_param: c.LPARA
     const handle: WindowHandle = .{
         .handle = .fromInt(@intCast(c.GetWindowLongPtrW(hwnd, .P_USERDATA))),
     };
-    const window = WindowHandle.windows.getPtr(handle.handle);
+    const window = instance.windows.getPtr(handle.handle);
 
     switch (u_msg) {
         c.WM_DISPLAYCHANGE => {

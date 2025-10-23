@@ -16,9 +16,9 @@ pub fn main() !void {
     defer zp.deinit();
 
     const monitors = try Monitor.all();
-
+    std.log.info("{any}", .{monitors});
     for (monitors) |handle| {
-        std.log.info("{s}", .{handle.getName()});
+        std.log.info("NAME: {s}", .{handle.getName()});
     }
     const window: Window = try .init(.{
         .mode = .{

@@ -1,15 +1,19 @@
 const std = @import("std");
 const core = @import("core");
+const context = @import("context.zig");
 const c = @import("win32").everything;
 const mem = std.mem;
 
 const utf16ToUtf8 = std.unicode.utf16LeToUtf8AllocZ;
 
-const Context = @import("Context.zig");
 const MonitorHandle = @import("MonitorHandle.zig");
+const Monitor = @import("Monitor.zig");
 const Win32Window = @import("Win32Window.zig");
 const String = core.StringTable.String;
+
 const Win32Monitor = @This();
+
+const instance = &context.instance;
 
 monitor: c.HMONITOR,
 adapter: [32]u16,
@@ -34,17 +38,13 @@ pub fn closest(window: Win32Window) !Win32Monitor {
 
 /// Polls the system for connected monitors and updates the monitor handles accordingly.
 pub fn poll() !void {
-    const gpa = Context.instance.gpa;
-    var monitors = MonitorHandle.monitors;
-    var strings = Context.instance.strings;
-
     // Any existing monitors might have been disconnected since last query
     // if not connected we change their state to disconnected.
     // if connected we set the handle to none.
     // Assume no more than 16 monitors for now, which is a lot.
     var possible_disconnected: []MonitorHandle = &.{};
-    possible_disconnected.len = monitors.count;
-    @memcpy(possible_disconnected, monitors.handlesTo(MonitorHandle));
+    possible_disconnected.len = instance.monitors.count;
+    @memcpy(possible_disconnected, instance.monitors.handlesTo(MonitorHandle));
 
     var adapter: c.DISPLAY_DEVICEW = undefined;
     var device: c.DISPLAY_DEVICEW = undefined;
@@ -80,7 +80,7 @@ pub fn poll() !void {
             var i: u32 = 0;
             for (possible_disconnected[0..]) |*handle| {
                 if (handle.handle != .none) {
-                    const monitor = monitors.getPtr(handle.handle);
+                    const monitor = instance.monitors.getPtr(handle.handle);
                     // If eql, device is still connected but might need updating
                     if (std.mem.eql(u16, &monitor.handle.win32.name, &device.DeviceName)) {
                         monitor.connected = true;
@@ -98,22 +98,25 @@ pub fn poll() !void {
             }
 
             // The monitor already existed, skip adding a new one
-            if (i < monitors.count)
+            if (i < instance.monitors.count)
                 continue;
 
-            const new_monitor_handle = try monitors.addOne(gpa);
-            var new_monitor = monitors.getPtr(new_monitor_handle);
+            const new_monitor_handle = try instance.monitors.addOne(instance.gpa);
+            var new_monitor = instance.monitors.getPtr(new_monitor_handle);
 
-            if (c.EnumDisplayMonitors(null, null, monitorCallback, @intCast(@intFromPtr(&new_monitor))) == 0) {
-                monitors.swapRemove(new_monitor_handle);
+            if (c.EnumDisplayMonitors(null, null, monitorCallback, @intCast(@intFromPtr(new_monitor))) == 0) {
+                instance.monitors.swapRemove(new_monitor_handle);
             }
 
-            const utf8_name = try utf16ToUtf8(gpa, &device.DeviceString);
-            new_monitor.name = try strings.getOrPut(gpa, utf8_name);
+            const utf16_name: [:0]const u16 = std.mem.span(@as([*:0]u16, @ptrCast(&device.DeviceString)));
+            const utf8_name = try utf16ToUtf8(instance.gpa, utf16_name);
+            const name = try instance.strings.getOrPut(instance.gpa, utf8_name);
+            new_monitor.name = name;
             new_monitor.connected = true;
             new_monitor.primary = is_primary;
-            new_monitor.handle.win32.name = device.DeviceString;
-            new_monitor.handle.win32.adapter = adapter.DeviceName;
+
+            @memcpy(&new_monitor.handle.win32.name, &device.DeviceString);
+            @memcpy(&new_monitor.handle.win32.adapter, &device.DeviceName);
         }
     }
 }
@@ -127,8 +130,7 @@ fn monitorCallback(
     _ = rect;
     _ = hdc;
     if (monitor) |mon| {
-        const monitor_ptr: *MonitorHandle.Monitor = @ptrFromInt(@as(usize, @intCast(data)));
-
+        const monitor_ptr: *Monitor = @ptrFromInt(@as(usize, @intCast(data)));
         monitor_ptr.handle.win32.monitor = mon;
     }
 

@@ -91,7 +91,7 @@ test "basic string insertion and retrieval" {
     var table: StringTable = .empty;
     defer table.deinit(gpa);
 
-    const hello = "hello";
+    const hello: []const u8 = "hello";
     const world = "world";
 
     const str_hello = try table.getOrPut(gpa, hello);
