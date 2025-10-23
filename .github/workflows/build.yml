@@ -1,0 +1,29 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        # Extend when platforms are added 
+        os: [windows-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Zig Compiler
+        uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: "master"
+      - name: Check formatting
+        shell: pwsh
+        run: zig fmt --check src build.zig
+      - name: Build and test
+        shell: pwsh
+        run: zig build test -Doptimize=ReleaseSafe
