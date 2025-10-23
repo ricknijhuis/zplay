@@ -54,9 +54,15 @@ pub fn getName(self: MonitorHandle) []const u8 {
 }
 
 /// Returns the work area of the monitor, excluding taskbars and docked windows.
-pub fn getWorkArea(self: MonitorHandle) Rect {
-    _ = self; // autofix
-}
+// pub fn getWorkArea(self: MonitorHandle) Rect {
+//     core.asserts.isOnThread(instance.main_thread);
+
+//     const monitor = instance.monitors.getPtr(self.handle);
+
+//     switch (monitor.native) {
+//         .wi
+//     }
+// }
 
 pub fn poll() !void {
     core.asserts.isOnThread(instance.main_thread);

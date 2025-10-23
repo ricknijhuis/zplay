@@ -15,5 +15,5 @@ const Win32Monitor = @import("Win32Monitor.zig");
 /// The native monitor handle for each platform
 pub const Native = union(enum) {
     /// Windows monitor handle
-    win32: Win32Monitor,
+    windows: Win32Monitor,
 };

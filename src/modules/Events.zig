@@ -3,7 +3,7 @@ const Events = @This();
 const Win32Events = @import("Win32Events.zig");
 
 const Native = union(enum) {
-    win32: Win32Events,
+    windows: Win32Events,
 };
 
 native: Native,
@@ -11,7 +11,7 @@ native: Native,
 pub fn init() !Events {
     const native: Native = blk: {
         comptime if (@import("builtin").os.tag == .windows) {
-            break :blk .{ .win32 = Win32Events{} };
+            break :blk .{ .windows = Win32Events{} };
         };
 
         return error.UnsupportedPlatform;

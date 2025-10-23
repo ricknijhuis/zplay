@@ -59,6 +59,7 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
 
     // TODO: Handle multi monitor setups.
     // TODO: Handle DPI scaling.
+
     var window_rect = try getPrimaryMonitorRect();
     const monitor_width = window_rect.right - window_rect.left;
     const monitor_height = window_rect.bottom - window_rect.top;

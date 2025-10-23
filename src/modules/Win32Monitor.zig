@@ -82,7 +82,7 @@ pub fn poll() !void {
                 if (handle.handle != .none) {
                     const monitor = instance.monitors.getPtr(handle.handle);
                     // If eql, device is still connected but might need updating
-                    if (std.mem.eql(u16, &monitor.handle.win32.name, &device.DeviceName)) {
+                    if (std.mem.eql(u16, &monitor.handle.windows.name, &device.DeviceName)) {
                         monitor.connected = true;
                         monitor.primary = is_primary;
 
@@ -115,8 +115,8 @@ pub fn poll() !void {
             new_monitor.connected = true;
             new_monitor.primary = is_primary;
 
-            @memcpy(&new_monitor.handle.win32.name, &device.DeviceString);
-            @memcpy(&new_monitor.handle.win32.adapter, &device.DeviceName);
+            @memcpy(&new_monitor.handle.windows.name, &device.DeviceString);
+            @memcpy(&new_monitor.handle.windows.adapter, &device.DeviceName);
         }
     }
 }
@@ -131,7 +131,7 @@ fn monitorCallback(
     _ = hdc;
     if (monitor) |mon| {
         const monitor_ptr: *Monitor = @ptrFromInt(@as(usize, @intCast(data)));
-        monitor_ptr.handle.win32.monitor = mon;
+        monitor_ptr.handle.windows.monitor = mon;
     }
 
     return c.TRUE;

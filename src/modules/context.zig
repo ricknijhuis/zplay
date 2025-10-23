@@ -41,7 +41,6 @@ pub fn init(allocator: ?Allocator) !void {
     }
 
     instance.main_thread = Thread.getCurrentId();
-    std.log.info("VAL: {any}", .{instance.main_thread});
 }
 
 pub fn deinit() void {

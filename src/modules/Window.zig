@@ -9,5 +9,5 @@ should_close: bool,
 const Win32Window = @import("Win32Window.zig");
 
 pub const Native = union(enum) {
-    win32: Win32Window,
+    windows: Win32Window,
 };

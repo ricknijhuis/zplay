@@ -4,6 +4,7 @@ const core = @import("core");
 const context = @import("context.zig");
 const Win32Window = @import("Win32Window.zig");
 const Window = @import("Window.zig");
+const MonitorHandle = @import("MonitorHandle.zig");
 const HandleSet = core.HandleSet;
 const Handle = HandleSet(Window).Handle;
 
@@ -24,11 +25,7 @@ pub const ModeState = enum {
     hidden,
 };
 
-pub const Mode = union(ModeType) {
-    windowed: ModeState,
-    borderless: ModeState,
-    fullscreen,
-};
+pub const Mode = union(ModeType) { windowed: ModeState, borderless: ModeState, fullscreen: MonitorHandle };
 
 pub const InitParams = struct {
     mode: Mode,
@@ -48,7 +45,7 @@ pub fn init(params: InitParams) !WindowHandle {
 
     const native: Window.Native = blk: {
         if (comptime builtin.os.tag == .windows) {
-            break :blk .{ .win32 = try .init(.{ .handle = handle }, params) };
+            break :blk .{ .windows = try .init(.{ .handle = handle }, params) };
         }
 
         return error.UnsupportedPlatform;
