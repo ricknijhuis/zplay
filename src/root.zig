@@ -17,7 +17,9 @@ pub const Vec4f64 = core.Vec4f64;
 
 pub const HandleSet = core.HandleSet;
 
+pub const MonitorHandle = mods.MonitorHandle;
 pub const WindowHandle = mods.WindowHandle;
+pub const Events = mods.Events;
 pub const Image = void;
 pub const Texture = void;
 pub const SpriteSheet = void;
@@ -30,8 +32,8 @@ pub const Mouse = void;
 pub const Controller = void;
 pub const Time = void;
 
-pub const init = mods.init;
-pub const deinit = mods.deinit;
+pub const init = mods.Context.init;
+pub const deinit = mods.Context.deinit;
 
 test {
     @import("std").testing.refAllDeclsRecursive(@This());

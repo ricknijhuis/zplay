@@ -1,20 +1,7 @@
 const std = @import("std");
-const Windowing = @import("windowing/root.zig");
+const core = @import("core");
 
-pub var gpa: std.mem.Allocator = undefined;
-
-pub const WindowHandle = Windowing.WindowHandle;
-
-pub fn init(allocator: ?std.mem.Allocator) !void {
-    if (allocator) |alloc| {
-        gpa = alloc;
-    } else {
-        gpa = std.heap.smp_allocator;
-    }
-
-    try Windowing.init();
-}
-
-pub fn deinit() void {
-    Windowing.deinit();
-}
+pub const WindowHandle = @import("WindowHandle.zig");
+pub const MonitorHandle = @import("MonitorHandle.zig");
+pub const Events = @import("Events.zig");
+pub const Context = @import("Context.zig");

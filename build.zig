@@ -55,7 +55,16 @@ pub fn build(b: *std.Build) void {
                 }),
             });
 
-            example_step.dependOn(&example_exe.step);
+            b.installArtifact(example_exe);
+
+            const run_cmd = b.addRunArtifact(example_exe);
+            run_cmd.step.dependOn(b.getInstallStep());
+
+            if (b.args) |args| {
+                run_cmd.addArgs(args);
+            }
+
+            example_step.dependOn(&run_cmd.step);
         }
     }
 

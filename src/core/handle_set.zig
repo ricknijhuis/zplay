@@ -59,6 +59,14 @@ fn HandleT(T: type) type {
             return @enumFromInt(@as(u32, @bitCast(self)));
         }
 
+        pub fn toInt(self: Self) u32 {
+            return @as(u32, @bitCast(self.toRaw()));
+        }
+
+        pub fn fromInt(value: u32) Self {
+            return Self.fromRaw(RawT.fromInt(value));
+        }
+
         pub inline fn init(index: u32, version: u32) Self {
             return .fromRaw(.{ .index = index, .version = version });
         }
@@ -80,11 +88,11 @@ pub fn HandleSet(comptime T: type) type {
 
         /// The sparse array containing the handles, might contain holes.
         /// if alignment of Handle and T are equal, sparse will contain the original allocated ptr.
+        /// this allows for a single allocation for sparse, dense and items.
         sparse: []Handle.Raw,
         dense: []Handle.Raw,
 
         /// The items in a densly packed array. On removal the last item is moved to the hole and the index
-        /// the sparse is pointing to is updated.
         items: []Item,
         capacity: u32,
         next: u32,
@@ -154,7 +162,26 @@ pub fn HandleSet(comptime T: type) type {
 
         /// Add one item to the list, grow capacity if needed but only exactly one. This can save memory and is usefull for smaller
         /// sets.
-        pub fn addOneExact(self: *Self, gpa: Allocator, item: Item) Allocator.Error!Handle {
+        pub fn addOneExact(self: *Self, gpa: Allocator) Allocator.Error!Handle {
+            try self.ensureExactCapacity(gpa, self.count + 1);
+
+            return self.addOneAssumeCapacity();
+        }
+
+        /// Add one item to the list, grow capacity if needed but only exactly one. This can save memory and is usefull for smaller
+        /// sets.
+        pub fn append(self: *Self, gpa: Allocator, item: Item) Allocator.Error!Handle {
+            try self.ensureUnusedCapacity(gpa, 1);
+
+            const handle = self.addOneAssumeCapacity();
+            self.set(handle, item);
+
+            return handle;
+        }
+
+        /// Add one item to the list, grow capacity if needed but only exactly one. This can save memory and is usefull for smaller
+        /// sets.
+        pub fn appendExact(self: *Self, gpa: Allocator, item: Item) Allocator.Error!Handle {
             try self.ensureExactCapacity(gpa, self.count + 1);
 
             const handle = self.addOneAssumeCapacity();
@@ -194,6 +221,7 @@ pub fn HandleSet(comptime T: type) type {
 
             const raw = handle.toRaw();
             const dense_index = self.sparse[raw.index].index;
+            // Update version, wrap around if needed
             const dense_version = self.sparse[raw.index].version +% 1;
 
             self.dense[dense_index].version = dense_version;
@@ -315,6 +343,30 @@ pub fn HandleSet(comptime T: type) type {
                 if (new >= minimum)
                     return new;
             }
+        }
+
+        pub fn clear(self: *Self) void {
+            for (self.sparse[0..self.capacity], 0..) |*entry, i| {
+                entry.version +%= 1;
+                entry.index = @intCast(i + 1);
+            }
+            if (self.capacity > 0) {
+                self.sparse[self.capacity - 1].index = 0;
+            }
+            self.count = 0;
+            self.next = 0;
+        }
+
+        pub fn handles(self: *const Self) []Handle {
+            return @as([*]Handle, @ptrCast(@alignCast(self.dense.ptr)))[0..self.dense.len];
+        }
+
+        /// Utility function to cast the handles to a different type, this allows for wrapping
+        /// the handle in a struct that can contain it's own set of functions.
+        pub fn handlesTo(self: *const Self, NewT: type) []NewT {
+            comptime debug.assert(@sizeOf(Handle) == @sizeOf(NewT));
+            comptime debug.assert(@alignOf(Handle) == @alignOf(NewT));
+            return @as([*]NewT, @ptrCast(@alignCast(self.dense.ptr)))[0..self.dense.len];
         }
 
         pub fn deinit(self: *Self, gpa: Allocator) void {
@@ -447,4 +499,41 @@ test "Handle becomes unavailable after remove" {
     try testing.expectEqual(false, sparse.contains(handles[rem1]));
 
     try testing.expectEqual(count - 2, sparse.count);
+}
+
+test "clear invalidates current handles and starts again at index 0" {
+    const TestT = struct {
+        foo: u32 = 0,
+    };
+
+    const allocator = testing.allocator;
+    var sparse: HandleSet(TestT) = .empty;
+    defer sparse.deinit(allocator);
+
+    var handles: [32]HandleSet(TestT).Handle = undefined;
+
+    for (0..handles.len) |i| {
+        handles[i] = try sparse.addOne(allocator);
+    }
+
+    try testing.expectEqual(sparse.sparse.len, sparse.dense.len);
+    try testing.expectEqual(sparse.sparse.len, sparse.items.len);
+    try testing.expectEqual(32, sparse.count);
+
+    sparse.clear();
+
+    try testing.expectEqual(sparse.count, 0);
+    try testing.expectEqual(sparse.capacity, 32);
+
+    for (handles) |handle| {
+        try testing.expectEqual(false, sparse.contains(handle));
+    }
+
+    for (0..handles.len) |i| {
+        handles[i] = try sparse.addOne(allocator);
+    }
+
+    for (handles) |handle| {
+        try testing.expect(sparse.contains(handle));
+    }
 }
