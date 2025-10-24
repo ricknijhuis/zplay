@@ -126,11 +126,15 @@ pub fn deinit(self: *Win32Window) void {
 }
 
 pub fn maximize(self: *Win32Window) void {
-    _ = self;
+    _ = c.ShowWindow(self.window, c.SW_MAXIMIZE);
+}
+
+pub fn restore(self: *Win32Window) void {
+    _ = c.ShowWindow(self.window, c.SW_RESTORE);
 }
 
 pub fn minimize(self: *Win32Window) void {
-    _ = c.ShowWindow(self.window, c.SW_SHOWMINIMIZED);
+    _ = c.ShowWindow(self.window, c.SW_MINIMIZE);
 }
 
 pub fn fullscreen(self: *Win32Window) void {

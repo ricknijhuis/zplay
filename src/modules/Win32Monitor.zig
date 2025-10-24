@@ -10,6 +10,7 @@ const MonitorHandle = @import("MonitorHandle.zig");
 const Monitor = @import("Monitor.zig");
 const Win32Window = @import("Win32Window.zig");
 const String = core.StringTable.String;
+const Rect = core.Rect;
 
 const Win32Monitor = @This();
 
@@ -121,6 +122,31 @@ pub fn poll() !void {
             @memcpy(&new_monitor.handle.windows.adapter, &device.DeviceName);
         }
     }
+}
+
+pub fn getWorkArea(self: *const Win32Monitor) Rect(i32) {
+    core.asserts.isOnThread(instance.main_thread);
+
+    var monitor_info: c.MONITORINFO = std.mem.zeroes(c.MONITORINFO);
+    monitor_info.cbSize = @sizeOf(c.MONITORINFO);
+
+    if (c.GetMonitorInfoW(self.monitor, &monitor_info) == 0) {
+        return .{
+            .position = .init(0, 0),
+            .size = .init(0, 0),
+        };
+    }
+
+    return .{
+        .position = .init(
+            @intCast(monitor_info.rcWork.left),
+            @intCast(monitor_info.rcWork.top),
+        ),
+        .size = .init(
+            @intCast(monitor_info.rcWork.right - monitor_info.rcWork.left),
+            @intCast(monitor_info.rcWork.bottom - monitor_info.rcWork.top),
+        ),
+    };
 }
 
 fn monitorCallback(

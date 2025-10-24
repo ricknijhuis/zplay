@@ -6,11 +6,11 @@ const context = @import("context.zig");
 const Monitor = @import("Monitor.zig");
 const Win32Monitor = @import("Win32Monitor.zig");
 const WindowHandle = @import("WindowHandle.zig");
-const StringTable = core.StringTable;
-const String = StringTable.String;
 const HandleSet = core.HandleSet;
+const StringTable = core.StringTable;
+const Rect = core.Rect;
 const Handle = HandleSet(Monitor).Handle;
-const Rect = core.Rect(u32);
+const String = StringTable.String;
 
 const MonitorHandle = @This();
 
@@ -54,15 +54,16 @@ pub fn getName(self: MonitorHandle) []const u8 {
 }
 
 /// Returns the work area of the monitor, excluding taskbars and docked windows.
-// pub fn getWorkArea(self: MonitorHandle) Rect {
-//     core.asserts.isOnThread(instance.main_thread);
+pub fn getWorkArea(self: MonitorHandle) Rect(i32) {
+    core.asserts.isOnThread(instance.main_thread);
 
-//     const monitor = instance.monitors.getPtr(self.handle);
-
-//     switch (monitor.native) {
-//         .wi
-//     }
-// }
+    const monitor = instance.monitors.getPtr(self.handle);
+    return switch (monitor.handle) {
+        inline else => |*native| {
+            return native.getWorkArea();
+        },
+    };
+}
 
 pub fn poll() !void {
     core.asserts.isOnThread(instance.main_thread);
