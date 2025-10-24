@@ -2,6 +2,7 @@ const std = @import("std");
 const core = @import("core");
 const context = @import("context.zig");
 const c = @import("win32").everything;
+const debug = std.debug;
 const mem = std.mem;
 
 const utf16ToUtf8 = std.unicode.utf16LeToUtf8AllocZ;
@@ -10,12 +11,14 @@ const MonitorHandle = @import("MonitorHandle.zig");
 const Monitor = @import("Monitor.zig");
 const Win32Window = @import("Win32Window.zig");
 const String = core.StringTable.String;
+const Rect = core.Rect;
 
+const Handle = c.HMONITOR;
 const Win32Monitor = @This();
 
 const instance = &context.instance;
 
-monitor: c.HMONITOR,
+monitor: Handle,
 adapter: [32]u16,
 name: [128]u16,
 
@@ -28,16 +31,19 @@ pub fn primary() !Win32Monitor {
     };
 }
 
-pub fn closest(window: Win32Window) !Win32Monitor {
+pub fn closest(window: Win32Window) error{MonitorNotFound}!Handle {
     const monitor = c.MonitorFromWindow(window.window, c.MONITOR_DEFAULTTONEAREST);
 
-    return .{
-        .monitor = monitor,
-    };
+    if (monitor) |handle| {
+        return handle;
+    }
+
+    return MonitorHandle.Error.MonitorNotFound;
 }
 
 /// Polls the system for connected monitors and updates the monitor handles accordingly.
-pub fn poll() !void {
+/// Can return OutOfMemory if memory allocation fails.
+pub fn poll() MonitorHandle.PollMonitorError!void {
     // Any existing monitors might have been disconnected since last query
     // if not connected we change their state to disconnected.
     // if connected we set the handle to none.
@@ -109,7 +115,16 @@ pub fn poll() !void {
             }
 
             const utf16_name: [:0]const u16 = std.mem.span(@as([*:0]u16, @ptrCast(&device.DeviceString)));
-            const utf8_name = try utf16ToUtf8(instance.gpa, utf16_name);
+            const utf8_name = utf16ToUtf8(instance.gpa, utf16_name) catch |err| {
+                switch (err) {
+                    error.OutOfMemory => {
+                        return MonitorHandle.PollMonitorError.OutOfMemory;
+                    },
+                    else => return MonitorHandle.PollMonitorError.MonitorNotCreated,
+                }
+            };
+            defer instance.gpa.free(utf8_name);
+
             const name = try instance.strings.getOrPut(instance.gpa, utf8_name);
             new_monitor.name = name;
             new_monitor.connected = true;
@@ -121,6 +136,25 @@ pub fn poll() !void {
     }
 }
 
+pub fn getWorkArea(self: *const Win32Monitor) Rect(i32) {
+    var monitor_info: c.MONITORINFO = std.mem.zeroes(c.MONITORINFO);
+    monitor_info.cbSize = @sizeOf(c.MONITORINFO);
+
+    // Monitor handle should always be valid here
+    debug.assert(c.GetMonitorInfoW(self.monitor, &monitor_info) != 0);
+
+    return .{
+        .position = .init(
+            @intCast(monitor_info.rcWork.left),
+            @intCast(monitor_info.rcWork.top),
+        ),
+        .size = .init(
+            @intCast(monitor_info.rcWork.right - monitor_info.rcWork.left),
+            @intCast(monitor_info.rcWork.bottom - monitor_info.rcWork.top),
+        ),
+    };
+}
+
 fn monitorCallback(
     monitor: ?c.HMONITOR,
     hdc: ?c.HDC,
@@ -129,10 +163,9 @@ fn monitorCallback(
 ) callconv(.c) c.BOOL {
     _ = rect;
     _ = hdc;
-    if (monitor) |mon| {
-        const monitor_ptr: *Monitor = @ptrFromInt(@as(usize, @intCast(data)));
-        monitor_ptr.handle.windows.monitor = mon;
-    }
+    const monitor_ptr: *Monitor = @ptrFromInt(@as(usize, @intCast(data)));
+    // Docs mention monitor can never be null: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nc-winuser-monitorenumproc
+    monitor_ptr.handle.windows.monitor = monitor.?;
 
     return c.TRUE;
 }

@@ -18,9 +18,7 @@ pub const Vec4i32 = Vec3(i32);
 pub const Vec4u32 = Vec3(u32);
 pub const Vec4f32 = Vec3(f32);
 
-pub const Recti32 = rectangle.Rect(i32);
-pub const Rectu32 = rectangle.Rect(u32);
-pub const Rectf32 = rectangle.Rect(f32);
+pub const Rect = rectangle.Rect;
 
 pub const HandleSet = handle_set.HandleSet;
 
