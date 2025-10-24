@@ -69,7 +69,7 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
         null,
     ), "Failed to create native window");
 
-    // Anoyingly, SetWindowLongPtrW can return 0 on both success and failure, so we have to check GetLastError to see if it actually failed.
+    // Annoyingly, SetWindowLongPtrW can return 0 on both success and failure, so we have to check GetLastError to see if it actually failed.
     c.SetLastError(.NO_ERROR);
     const result = c.SetWindowLongPtrW(window, .P_USERDATA, @intCast(handle.handle.toInt()));
     const err = c.GetLastError();
@@ -120,11 +120,6 @@ pub fn minimize(self: *Win32Window) void {
 
 pub fn fullscreen(self: *Win32Window) void {
     _ = c.ShowWindow(self.window, c.SW_SHOWMAXIMIZED);
-}
-
-fn setLongPtr(hwnd: c.HWND, index: c.INT, value: isize) isize {
-    c.SetLastError(0);
-    return c.SetWindowLongPtrW(hwnd, index, value);
 }
 
 fn getWindowStyle(mode: Mode) c.WINDOW_STYLE {

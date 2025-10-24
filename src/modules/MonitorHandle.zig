@@ -53,6 +53,8 @@ pub fn primary() PollMonitorError!MonitorHandle {
         }
     }
 
+    errors.throwIfZero(handles.len, Error.MonitorNotFound, "No monitor found.");
+
     // Fallback to first monitor if no primary found
     return .{ .handle = handles[0] };
 }
@@ -82,7 +84,9 @@ pub fn closest(window_handle: WindowHandle) Error!MonitorHandle {
                     return monitor_handle;
                 }
             }
-            errors.throwIfNotTrue(false, Error.MonitorNotFound, "No monitor found");
+
+            std.log.err("{s}", .{"No monitor found"});
+            return Error.MonitorNotFound;
         },
     }
 }
