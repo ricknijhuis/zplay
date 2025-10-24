@@ -2,6 +2,9 @@ const builtin = @import("builtin");
 const core = @import("core");
 const mods = @import("modules");
 
+pub const asserts = core.asserts;
+pub const errors = core.errors;
+
 pub const Vec2i32 = core.Vec2i32;
 pub const Vec2u32 = core.Vec2u32;
 pub const Vec2f32 = core.Vec2f32;

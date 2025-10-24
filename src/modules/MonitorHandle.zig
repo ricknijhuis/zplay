@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
 const context = @import("context.zig");
+const errors = core.errors;
 
 const Monitor = @import("Monitor.zig");
 const Win32Monitor = @import("Win32Monitor.zig");
@@ -43,19 +44,12 @@ handle: Handle,
 /// If no monitors are found, it returns 'NoMonitorsFound'.
 /// If out of memory occurs, it returns 'OutOfMemory'.
 pub fn primary() PollMonitorError!MonitorHandle {
-    if (instance.monitors.count == 0)
-        try poll();
-
-    const handles = instance.monitors.handles();
-
-    if (handles.len == 0) {
-        return Error.NoMonitorsFound;
-    }
+    const handles = try all();
 
     for (handles) |handle| {
-        const monitor = instance.monitors.getPtr(handle);
+        const monitor = instance.monitors.getPtr(handle.handle);
         if (monitor.primary) {
-            return .{ .handle = handle };
+            return handle;
         }
     }
 
@@ -68,9 +62,7 @@ pub fn all() PollMonitorError![]MonitorHandle {
     if (instance.monitors.count == 0)
         try poll();
 
-    if (instance.monitors.count == 0) {
-        return Error.NoMonitorsFound;
-    }
+    errors.throwIfZero(instance.monitors.count, Error.NoMonitorsFound, "No monitors found");
 
     return instance.monitors.handlesTo(MonitorHandle);
 }
@@ -90,7 +82,7 @@ pub fn closest(window_handle: WindowHandle) Error!MonitorHandle {
                     return monitor_handle;
                 }
             }
-            return Error.MonitorNotFound;
+            errors.throwIfNotTrue(false, Error.MonitorNotFound, "No monitor found");
         },
     }
 }

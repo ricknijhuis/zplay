@@ -4,6 +4,7 @@ const context = @import("context.zig");
 const c = @import("win32").everything;
 const debug = std.debug;
 const mem = std.mem;
+const errors = core.errors;
 
 const utf16ToUtf8 = std.unicode.utf16LeToUtf8AllocZ;
 
@@ -33,12 +34,7 @@ pub fn primary() !Win32Monitor {
 
 pub fn closest(window: Win32Window) error{MonitorNotFound}!Handle {
     const monitor = c.MonitorFromWindow(window.window, c.MONITOR_DEFAULTTONEAREST);
-
-    if (monitor) |handle| {
-        return handle;
-    }
-
-    return MonitorHandle.Error.MonitorNotFound;
+    errors.throwIfNull(monitor, MonitorHandle.Error.MonitorNotFound, "Monitor not found by window handle");
 }
 
 /// Polls the system for connected monitors and updates the monitor handles accordingly.
@@ -115,14 +111,7 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
             }
 
             const utf16_name: [:0]const u16 = std.mem.span(@as([*:0]u16, @ptrCast(&device.DeviceString)));
-            const utf8_name = utf16ToUtf8(instance.gpa, utf16_name) catch |err| {
-                switch (err) {
-                    error.OutOfMemory => {
-                        return MonitorHandle.PollMonitorError.OutOfMemory;
-                    },
-                    else => return MonitorHandle.PollMonitorError.MonitorNotCreated,
-                }
-            };
+            const utf8_name = errors.panicIfError(utf16ToUtf8(instance.gpa, utf16_name), "Failed to decode utf16 to utf8");
             defer instance.gpa.free(utf8_name);
 
             const name = try instance.strings.getOrPut(instance.gpa, utf8_name);
