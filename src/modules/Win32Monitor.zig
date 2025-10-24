@@ -34,7 +34,7 @@ pub fn primary() !Win32Monitor {
 
 pub fn closest(window: Win32Window) error{MonitorNotFound}!Handle {
     const monitor = c.MonitorFromWindow(window.window, c.MONITOR_DEFAULTTONEAREST);
-    errors.throwIfNull(monitor, MonitorHandle.Error.MonitorNotFound, "Monitor not found by window handle");
+    return errors.throwIfNull(monitor, MonitorHandle.Error.MonitorNotFound, "Monitor not found by window handle");
 }
 
 /// Polls the system for connected monitors and updates the monitor handles accordingly.
