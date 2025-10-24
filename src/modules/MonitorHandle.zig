@@ -26,11 +26,13 @@ pub fn primary() !MonitorHandle {
         try poll();
 
     for (instance.monitors.handles()) |handle| {
-        const monitor = instance.monitors.getPtr(handle.handle);
+        const monitor = instance.monitors.getPtr(handle);
         if (monitor.primary) {
-            return handle;
+            return .{ .handle = handle };
         }
     }
+
+    return error.NoPrimaryMonitor;
 }
 
 /// Returns all monitor handles connected to the system.
@@ -59,9 +61,7 @@ pub fn getWorkArea(self: MonitorHandle) Rect(i32) {
 
     const monitor = instance.monitors.getPtr(self.handle);
     return switch (monitor.handle) {
-        inline else => |*native| {
-            return native.getWorkArea();
-        },
+        inline else => |*native| native.getWorkArea(),
     };
 }
 
