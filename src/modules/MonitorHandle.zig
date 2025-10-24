@@ -49,7 +49,7 @@ pub fn primary() PollMonitorError!MonitorHandle {
     for (handles) |handle| {
         const monitor = instance.monitors.getPtr(handle.handle);
         if (monitor.primary) {
-            return handle;
+            return .{ .handle = handle };
         }
     }
 
