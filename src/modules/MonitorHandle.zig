@@ -21,7 +21,7 @@ pub const PollMonitorError = std.mem.Allocator.Error || error{
     /// No monitors were found on the system. This either means no monitors are connected or a bug occurred while querying the OS.
     NoMonitorsFound,
     /// A monitor could not be created due to an unknown error.
-    /// On windows this can occur when converson between UTF-16 and UTF-8 fails.
+    /// On windows this can occur when conversion between UTF-16 and UTF-8 fails.
     MonitorNotCreated,
 };
 
