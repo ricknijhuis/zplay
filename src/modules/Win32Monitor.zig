@@ -99,7 +99,7 @@ pub fn poll() !void {
             }
 
             // The monitor already existed, skip adding a new one
-            if (instance.monitors.count < i)
+            if (i < instance.monitors.count)
                 continue;
 
             const new_monitor_handle = try instance.monitors.addOne(instance.gpa);
