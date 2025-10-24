@@ -1,3 +1,4 @@
+const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
 
@@ -11,6 +12,12 @@ const Handle = HandleSet(Window).Handle;
 const WindowHandle = @This();
 
 const instance = &context.instance;
+
+pub const CreateWindowError = error{
+    NativeWindowCreationFailed,
+};
+
+pub const Error = std.mem.Allocator.Error || CreateWindowError;
 
 pub const ModeType = enum {
     /// A standard window with borders and title bar using the given size.
@@ -59,7 +66,7 @@ handle: Handle = .none,
 /// Returns a handle to the created window.
 // TODO: Support other platforms besides Windows.
 // TODO: Supply error set.
-pub fn init(params: InitParams) !WindowHandle {
+pub fn init(params: InitParams) Error!WindowHandle {
     core.asserts.isOnThread(instance.main_thread);
 
     const gpa = instance.gpa;
@@ -71,7 +78,7 @@ pub fn init(params: InitParams) !WindowHandle {
             break :blk .{ .windows = try .init(.{ .handle = handle }, params) };
         }
 
-        return error.UnsupportedPlatform;
+        @compileError("Platform not 'yet' supported");
     };
 
     errdefer comptime unreachable;

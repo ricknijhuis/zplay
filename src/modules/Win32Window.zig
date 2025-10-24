@@ -24,7 +24,7 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
         if (c.GetModuleHandleW(null)) |value| {
             break :blk value;
         } else {
-            return error.Win32NoModuleHandleFound;
+            return WindowHandle.Error.NativeWindowCreationFailed;
         }
     };
 
@@ -51,7 +51,12 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
         try checkResult(c.RegisterClassExW(&window_class) != 0);
     }
 
-    const title = try utf8ToUtf16(gpa, params.title);
+    const title = utf8ToUtf16(gpa, params.title) catch |err| {
+        return switch (err) {
+            error.OutOfMemory => return WindowHandle.Error.OutOfMemory,
+            else => return WindowHandle.Error.NativeWindowCreationFailed,
+        };
+    };
     defer gpa.free(title);
 
     const style = getWindowStyle(params.mode);
@@ -59,32 +64,15 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
 
     // TODO: Handle multi monitor setups.
     // TODO: Handle DPI scaling.
-
-    var window_rect = try getPrimaryMonitorRect();
-    const monitor_width = window_rect.right - window_rect.left;
-    const monitor_height = window_rect.bottom - window_rect.top;
-    const window_width: c_long = @intCast(params.width);
-    const window_height: c_long = @intCast(params.height);
-    const denominator: c_long = 2;
-
-    if (params.mode == .windowed) {
-        window_rect.left = @divExact(monitor_width, denominator) - @divExact(window_width, denominator);
-        window_rect.top = @divExact(monitor_height, denominator) - @divExact(window_height, denominator);
-        window_rect.right = window_rect.left + window_width;
-        window_rect.bottom = window_rect.top + window_height;
-
-        try checkResult(c.AdjustWindowRectEx(&window_rect, style, c.FALSE, style_ex) == c.TRUE);
-    }
-
     const window = c.CreateWindowExW(
         style_ex,
         atom_name,
         title,
         style,
-        window_rect.left,
-        window_rect.top,
-        window_rect.right - window_rect.left,
-        window_rect.bottom - window_rect.top,
+        c.CW_USEDEFAULT,
+        c.CW_USEDEFAULT,
+        @intCast(params.width),
+        @intCast(params.height),
         null,
         null,
         h_instance,
@@ -164,25 +152,10 @@ fn getWindowStyleEx(mode: Mode) c.WINDOW_EX_STYLE {
     return style_ex;
 }
 
-fn getPrimaryMonitorRect() !c.RECT {
-    const pt_zero = c.POINT{ .x = 0, .y = 0 };
-    const monitor = c.MonitorFromPoint(pt_zero, c.MONITOR_DEFAULTTONEAREST);
-    var monitor_info = c.MONITORINFO{
-        .cbSize = @sizeOf(c.MONITORINFO),
-        .dwFlags = undefined,
-        .rcMonitor = undefined,
-        .rcWork = undefined,
-    };
-
-    try checkResult(c.GetMonitorInfoW(monitor, &monitor_info) != 0);
-
-    return monitor_info.rcMonitor;
-}
-
 // TODO: Improve error handling, log errors.
-fn checkResult(ok: bool) !void {
+fn checkResult(ok: bool) WindowHandle.Error!void {
     if (ok) return;
-    return error.Unexpected;
+    return WindowHandle.Error.NativeWindowCreationFailed;
 }
 
 fn windowProcedure(hwnd: c.HWND, u_msg: u32, w_param: c.WPARAM, l_param: c.LPARAM) callconv(.c) isize {
