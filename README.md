@@ -7,7 +7,7 @@ Here are some features the project aims to provide. As the project is in very ea
 might only work minimally or not work at all.
 *   Managing windows (Multiple windows, multiple monitor)
 *   Input event handling using keyboard, mouse and controllers
-*   Rendering using vulkan with batching support and zig shaders
+*   Rendering using Vulkan with batching support and Zig shaders
 *   Audio playback
 *   Math
 
