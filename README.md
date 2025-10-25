@@ -3,7 +3,7 @@
 `zplay` is a game development framework written from scratch in Zig. It aims to provide a simple and easy-to-use API for creating games.
 
 ## Features
-Here some features the project aims to provide. As the project is in very early development, lot's of these features
+Here are some features the project aims to provide. As the project is in very early development, lots of these features
 might only work minimally or not work at all.
 *   Managing windows(Multiple windows, multiple monitor)
 *   Input event handling using keyboard, mouse and controllers
