@@ -1,3 +1,5 @@
+//! A generic rectangle structure with position and size.
+//! Used to represent windows, monitors, and other rectangular areas.
 const core = @import("root.zig");
 
 pub fn Rect(comptime T: type) type {

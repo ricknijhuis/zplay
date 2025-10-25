@@ -1,5 +1,6 @@
-/// Represents a monitor connected to the system
-/// Should only be used internally, to access properties use 'MonitorHandle' functions
+//! Represents a monitor connected to the system
+//! Should only be used internally, to access properties use 'MonitorHandle' functions
+
 /// The native monitor handle
 handle: Native,
 /// The monitor's user friendly name

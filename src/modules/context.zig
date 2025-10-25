@@ -1,3 +1,7 @@
+//! This module defines the global context for the application, managing resources such as
+//! memory allocation, string tables, and handle sets for windows and monitors and other resources.
+//! There should only be one instance of this context throughout the application lifecycle.
+//! Generally users should not need to interact with this module directly, as it is used internally by other modules.
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
@@ -12,7 +16,6 @@ const HandleSet = core.HandleSet;
 const Window = @import("Window.zig");
 const Monitor = @import("Monitor.zig");
 
-// TODO: Maybe move all handle collections to here as well, as they need to be deinitialized from here as well.
 const Context = struct {
     gpa: Allocator,
     strings: StringTable,
@@ -49,6 +52,7 @@ pub fn deinit() void {
     instance.strings.deinit(instance.gpa);
 
     if (builtin.mode == .Debug) {
+        // TODO: check for memory leaks
         _ = debug_allocator.deinit();
     }
 }

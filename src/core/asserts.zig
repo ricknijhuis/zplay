@@ -1,3 +1,7 @@
+//! This module provides some asserts used by zplay.
+//! As with the standard library, though these asserts may be optimized out in release builds though
+//! that is not guaranteed, for example when the conditions have side effects.
+
 const std = @import("std");
 const builtin = @import("builtin");
 const debug = std.debug;
@@ -12,18 +16,23 @@ pub inline fn isOnThread(required: Thread.Id) void {
     }
 }
 
-/// Asserts that the given value is of integer type.
+/// Asserts at comptime that the given value is of integer type.
 /// This works for both, unsigned, signed and comptime integers.
 pub inline fn isInt(value: anytype) void {
     comptime debug.assert(@typeInfo(@TypeOf(value)) == .int or @typeInfo(@TypeOf(value)) == .comptime_int);
 }
 
-/// Asserts that the given value is of optional type.
+/// Asserts at comptime that the given value is of optional type.
 pub inline fn isOptional(value: anytype) void {
     comptime debug.assert(@typeInfo(@TypeOf(value)) == .optional);
 }
 
-/// Asserts that the given value is of error union type.
+/// Asserts at comptime that the given value is of error union type.
 pub inline fn isErrorUnion(value: anytype) void {
     comptime debug.assert(@typeInfo(@TypeOf(value)) == .error_union);
+}
+
+/// Asserts at comptime that the given value is of error union type.
+pub inline fn isError(value: anytype) void {
+    comptime debug.assert(@typeInfo(@TypeOf(value)) == .error_set);
 }

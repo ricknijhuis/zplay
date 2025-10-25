@@ -1,3 +1,6 @@
+//! Vector math library providing Vec2, Vec3, and Vec4 types with common operations.
+//! When extending this library, make sure to only add functions that make sense for all vector sizes to the VecImpl struct.
+//! Otherwise, add them to the specific Vec2, Vec3, or Vec4 structs.
 const std = @import("std");
 
 pub const VecComponent = enum { x, y, z, w };

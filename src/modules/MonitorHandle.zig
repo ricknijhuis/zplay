@@ -1,3 +1,4 @@
+//! Provides an abstraction over platform-specific monitor handles and functionality.
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
@@ -49,14 +50,12 @@ pub fn primary() PollMonitorError!MonitorHandle {
     for (handles) |handle| {
         const monitor = instance.monitors.getPtr(handle.handle);
         if (monitor.primary) {
-            return .{ .handle = handle };
+            return handle;
         }
     }
 
-    errors.throwIfZero(handles.len, Error.MonitorNotFound, "No monitor found.");
-
     // Fallback to first monitor if no primary found
-    return .{ .handle = handles[0] };
+    return handles[0];
 }
 
 /// Returns all monitor handles connected to the system.
@@ -64,7 +63,7 @@ pub fn all() PollMonitorError![]MonitorHandle {
     if (instance.monitors.count == 0)
         try poll();
 
-    errors.throwIfZero(instance.monitors.count, Error.NoMonitorsFound, "No monitors found");
+    try errors.throwIfZero(instance.monitors.count, PollMonitorError.NoMonitorsFound, "No monitors found");
 
     return instance.monitors.handlesTo(MonitorHandle);
 }
@@ -85,8 +84,7 @@ pub fn closest(window_handle: WindowHandle) Error!MonitorHandle {
                 }
             }
 
-            std.log.err("{s}", .{"No monitor found"});
-            return Error.MonitorNotFound;
+            return errors.throw(Error.MonitorNotFound, "No monitor found");
         },
     }
 }

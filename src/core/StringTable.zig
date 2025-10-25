@@ -1,6 +1,6 @@
-/// A string table to store all strings used in the application. Any function should accept String instead of []const u8.
-/// Only allows for inserting not removing. Should not be used for very large strings that are short lived.
-/// NOT THREAD SAFE!
+//! A string table to store all strings used in the application. Any function should accept String instead of []const u8.
+//! Only allows for inserting not removing. Should not be used for very large strings that are short lived.
+//! NOT THREAD SAFE!
 const std = @import("std");
 const mem = std.mem;
 const hash_map = std.hash_map;

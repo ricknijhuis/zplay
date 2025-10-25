@@ -1,5 +1,7 @@
-/// Represents a window
-/// Should only be used internally, to access properties use 'WindowHandle' functions
+//! Represents a window
+//! Should only be used internally, to access properties use 'WindowHandle' functions
+
+/// The native window handle
 handle: Native,
 title: []const u8,
 width: u32,

@@ -1,3 +1,4 @@
+//! Provides an abstraction over platform-specific monitor handles and functionality.
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
