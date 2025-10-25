@@ -10,7 +10,7 @@ const debug = std.debug;
 
 /// If the given condition is not true, logs the given message and returns the given error.
 pub fn throwIfNotTrue(condition: bool, err: anytype, msg: []const u8) @TypeOf(err)!void {
-    asserts.IsError(err);
+    asserts.isError(err);
 
     if (condition)
         return;
@@ -110,6 +110,57 @@ pub fn throw(err: anytype, msg: []const u8) @TypeOf(err)!void {
 }
 
 /// Reduces the given error union value to a unified error type by mapping any error to the given UnifiedError.
-pub fn reduce(comptime UnifiedError: anyerror, val: anytype) !@typeInfo(@TypeOf(val)).ErrorUnion.payload {
-    return val catch return UnifiedError;
+pub fn reduce(comptime err: anytype, val: anytype) @TypeOf(err)!@typeInfo(@TypeOf(val)).error_union.payload {
+    return val catch return err;
+}
+
+const TestError = error{ TestError1, TestError2 };
+// Only able to test happy paths for now as panics would fail the test and error logs will
+// make the test step fail
+test "throwIfNotTrue: happy path" {
+    try throwIfNotTrue(true, TestError.TestError1, "should not fail");
+}
+
+test "panicIfNotTrue: happy path" {
+    panicIfNotTrue(true, "should not panic");
+}
+
+test "throwIfZero: happy path" {
+    try throwIfZero(42, TestError.TestError1, "should not fail");
+}
+
+test "panicIfZero: happy path" {
+    panicIfZero(1, "should not panic");
+}
+
+test "throwIfNull: happy path" {
+    const maybe_val: ?u8 = 7;
+    const val = try throwIfNull(maybe_val, TestError.TestError1, "should not fail");
+    try std.testing.expectEqual(@as(u8, 7), val);
+}
+
+test "panicIfNull: happy path" {
+    const maybe_val: ?u8 = 99;
+    const val = panicIfNull(maybe_val, "should not panic");
+    try std.testing.expectEqual(@as(u8, 99), val);
+}
+
+test "throwIfError: happy path" {
+    const ok_value: TestError!u8 = 10;
+    const val = throwIfError(ok_value, "should succeed");
+    try std.testing.expectEqual(@as(u8, 10), val);
+}
+
+test "panicIfError: happy path" {
+    const ok_value: TestError!u8 = 77;
+    const val = panicIfError(ok_value, "should not panic");
+    try std.testing.expectEqual(@as(u8, 77), val);
+}
+
+test "reduce: happy path" {
+    const UnifiedError = error{Unified};
+
+    const ok_val: TestError!u8 = 42;
+    const val = try reduce(UnifiedError.Unified, ok_val);
+    try std.testing.expectEqual(@as(u8, 42), val);
 }
