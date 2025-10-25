@@ -3,6 +3,7 @@ const rectangle = @import("rectangle.zig");
 const handle_set = @import("handle_set.zig");
 
 pub const asserts = @import("asserts.zig");
+pub const errors = @import("errors.zig");
 
 pub const Vec2 = vector.Vec2;
 pub const Vec3 = vector.Vec3;

@@ -1,7 +1,9 @@
+//! Provides an abstraction over platform-specific monitor handles and functionality.
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
 const context = @import("context.zig");
+const errors = core.errors;
 
 const Monitor = @import("Monitor.zig");
 const Win32Monitor = @import("Win32Monitor.zig");
@@ -43,24 +45,17 @@ handle: Handle,
 /// If no monitors are found, it returns 'NoMonitorsFound'.
 /// If out of memory occurs, it returns 'OutOfMemory'.
 pub fn primary() PollMonitorError!MonitorHandle {
-    if (instance.monitors.count == 0)
-        try poll();
-
-    const handles = instance.monitors.handles();
-
-    if (handles.len == 0) {
-        return Error.NoMonitorsFound;
-    }
+    const handles = try all();
 
     for (handles) |handle| {
-        const monitor = instance.monitors.getPtr(handle);
+        const monitor = instance.monitors.getPtr(handle.handle);
         if (monitor.primary) {
-            return .{ .handle = handle };
+            return handle;
         }
     }
 
     // Fallback to first monitor if no primary found
-    return .{ .handle = handles[0] };
+    return handles[0];
 }
 
 /// Returns all monitor handles connected to the system.
@@ -68,9 +63,7 @@ pub fn all() PollMonitorError![]MonitorHandle {
     if (instance.monitors.count == 0)
         try poll();
 
-    if (instance.monitors.count == 0) {
-        return Error.NoMonitorsFound;
-    }
+    try errors.throwIfZero(instance.monitors.count, PollMonitorError.NoMonitorsFound, "No monitors found");
 
     return instance.monitors.handlesTo(MonitorHandle);
 }
@@ -81,18 +74,17 @@ pub fn closest(window_handle: WindowHandle) Error!MonitorHandle {
     const window = instance.windows.getPtr(window_handle.handle);
     const monitors = try all();
 
-    switch (window.handle) {
-        inline else => |native_window| {
-            const native_monitor = try Win32Monitor.closest(native_window);
-            for (monitors) |monitor_handle| {
-                const monitor = instance.monitors.getPtr(monitor_handle.handle);
-                if (monitor.handle.windows.monitor == native_monitor) {
-                    return monitor_handle;
-                }
-            }
-            return Error.MonitorNotFound;
-        },
+    const native_window = window.native;
+    const native_monitor = try Monitor.Native.closest(native_window);
+
+    for (monitors) |monitor_handle| {
+        const monitor = instance.monitors.getPtr(monitor_handle.handle);
+        if (monitor.native.monitor == native_monitor) {
+            return monitor_handle;
+        }
     }
+
+    return errors.throw(Error.MonitorNotFound, "No monitor found");
 }
 
 /// Returns the device name of the monitor.
@@ -114,10 +106,5 @@ pub fn getWorkArea(self: MonitorHandle) Rect(i32) {
 pub fn poll() PollMonitorError!void {
     core.asserts.isOnThread(instance.main_thread);
 
-    switch (builtin.os.tag) {
-        .windows => {
-            try Win32Monitor.poll();
-        },
-        else => @compileError("Platform not 'yet' supported"),
-    }
+    try Monitor.Native.poll();
 }

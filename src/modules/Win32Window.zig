@@ -1,5 +1,7 @@
 const std = @import("std");
+const core = @import("core");
 const c = @import("win32").everything;
+const errors = core.errors;
 const debug = std.debug;
 
 const utf8ToUtf16Lit = std.unicode.utf8ToUtf16LeStringLiteral;
@@ -20,14 +22,7 @@ window: c.HWND,
 pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
     const gpa = instance.gpa;
 
-    const h_instance: c.HINSTANCE = blk: {
-        if (c.GetModuleHandleW(null)) |value| {
-            break :blk value;
-        } else {
-            return WindowHandle.Error.NativeWindowCreationFailed;
-        }
-    };
-
+    const h_instance: c.HINSTANCE = errors.panicIfNull(c.GetModuleHandleW(null), "Unable to get HINSTANCE");
     {
         const window_class: c.WNDCLASSEXW = .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
@@ -48,15 +43,10 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
             .hIconSm = null,
         };
 
-        try checkResult(c.RegisterClassExW(&window_class) != 0);
+        errors.panicIfZero(c.RegisterClassExW(&window_class), "Failed to register window class");
     }
 
-    const title = utf8ToUtf16(gpa, params.title) catch |err| {
-        return switch (err) {
-            error.OutOfMemory => return WindowHandle.Error.OutOfMemory,
-            else => return WindowHandle.Error.NativeWindowCreationFailed,
-        };
-    };
+    const title = errors.panicIfError(utf8ToUtf16(gpa, params.title), "Failed to convert window title to UTF-16");
     defer gpa.free(title);
 
     const style = getWindowStyle(params.mode);
@@ -64,7 +54,7 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
 
     // TODO: Handle multi monitor setups.
     // TODO: Handle DPI scaling.
-    const window = c.CreateWindowExW(
+    const window = errors.panicIfNull(c.CreateWindowExW(
         style_ex,
         atom_name,
         title,
@@ -77,10 +67,13 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
         null,
         h_instance,
         null,
-    );
+    ), "Failed to create native window");
 
-    try checkResult(window != null);
-    try checkResult(c.SetWindowLongPtrW(window, .P_USERDATA, @intCast(handle.handle.toInt())) == 0);
+    // Annoyingly, SetWindowLongPtrW can return 0 on both success and failure, so we have to check GetLastError to see if it actually failed.
+    c.SetLastError(.NO_ERROR);
+    const result = c.SetWindowLongPtrW(window, .P_USERDATA, @intCast(handle.handle.toInt()));
+    const err = c.GetLastError();
+    errors.panicIfNotTrue(!(result == 0 and err != .NO_ERROR), "Failed to set window long ptr");
 
     switch (params.mode) {
         .fullscreen => {
@@ -105,7 +98,7 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
     }
 
     return .{
-        .window = window.?,
+        .window = window,
     };
 }
 
@@ -150,12 +143,6 @@ fn getWindowStyleEx(mode: Mode) c.WINDOW_EX_STYLE {
         style_ex.TOPMOST = 1;
     }
     return style_ex;
-}
-
-// TODO: Improve error handling, log errors.
-fn checkResult(ok: bool) WindowHandle.Error!void {
-    if (ok) return;
-    return WindowHandle.Error.NativeWindowCreationFailed;
 }
 
 fn windowProcedure(hwnd: c.HWND, u_msg: u32, w_param: c.WPARAM, l_param: c.LPARAM) callconv(.c) isize {

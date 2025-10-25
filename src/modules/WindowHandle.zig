@@ -1,3 +1,4 @@
+//! Provides an abstraction over platform-specific monitor handles and functionality.
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
@@ -73,18 +74,12 @@ pub fn init(params: InitParams) Error!WindowHandle {
     const handle = try instance.windows.addOneExact(gpa);
     const window = instance.windows.getPtr(handle);
 
-    const native: Window.Native = blk: {
-        if (comptime builtin.os.tag == .windows) {
-            break :blk .{ .windows = try .init(.{ .handle = handle }, params) };
-        }
-
-        @compileError("Platform not 'yet' supported");
-    };
+    const native: Window.Native = try .init(.{ .handle = handle }, params);
 
     errdefer comptime unreachable;
 
     window.* = .{
-        .handle = native,
+        .native = native,
         .title = params.title,
         .width = params.width,
         .height = params.height,
@@ -102,11 +97,7 @@ pub fn deinit(self: WindowHandle) void {
 
     const window = instance.windows.getPtr(self.handle);
 
-    switch (window.handle) {
-        inline else => |*platform| {
-            platform.deinit();
-        },
-    }
+    window.native.deinit();
 
     instance.windows.swapRemove(self.handle);
 }
@@ -129,29 +120,17 @@ pub fn setSize(self: WindowHandle, size: core.Vec2u32) void {
 /// Maximizes the window to fill the screen, without going into fullscreen mode.
 pub fn maximize(self: WindowHandle) void {
     const window = instance.windows.getPtr(self.handle);
-    switch (window.handle) {
-        inline else => |*platform| {
-            platform.maximize();
-        },
-    }
+    window.native.maximize();
 }
 
 /// Restores the window to its previous size and position before being maximized or minimized.
 pub fn restore(self: WindowHandle) void {
     const window = instance.windows.getPtr(self.handle);
-    switch (window.handle) {
-        inline else => |*platform| {
-            platform.restore();
-        },
-    }
+    window.native.restore();
 }
 
 /// Minimizes the window to the taskbar or dock.
 pub fn minimize(self: WindowHandle) void {
     const window = instance.windows.getPtr(self.handle);
-    switch (window.handle) {
-        inline else => |*platform| {
-            platform.minimize();
-        },
-    }
+    window.native.minimize();
 }

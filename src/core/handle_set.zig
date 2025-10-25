@@ -1,3 +1,9 @@
+//! A container using sparse set to manage handles to items of type T.
+//! Handles are generational and typesafe. The generation wrap around after max value is reached.
+//! All items are stored in a single contiguous block of memory,
+//! the sparse, dense and items slices provide pieces of that memory block. They are
+//! placed in order of alignment.
+//! NOT THREAD SAFE!
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;

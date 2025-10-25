@@ -1,3 +1,6 @@
+//! Vector math library providing Vec2, Vec3, and Vec4 types with common operations.
+//! When extending this library, make sure to only add functions that make sense for all vector sizes to the VecImpl struct.
+//! Otherwise, add them to the specific Vec2, Vec3, or Vec4 structs.
 const std = @import("std");
 
 pub const VecComponent = enum { x, y, z, w };
@@ -80,7 +83,7 @@ pub fn Vec3(comptime T: type) type {
         pub const lenSq = VecImpl.lenSq;
         pub const distance = VecImpl.distance;
 
-        pub inline fn swizzle(self: *const Self, comptime comp_x: VecComponent, comptime comp_y: VecComponent, comptime comp_z: VecComponent) Self {
+        pub inline fn swizzle(self: Self, comptime comp_x: VecComponent, comptime comp_y: VecComponent, comptime comp_z: VecComponent) Self {
             return .{ .data = @shuffle(ScalarT, self.data, undefined, [3]ScalarT{
                 @intFromEnum(comp_x),
                 @intFromEnum(comp_y),
@@ -90,10 +93,10 @@ pub fn Vec3(comptime T: type) type {
 
         pub inline fn cross(self: Self, other: Self) Self {
             const s1 = self.swizzle(.y, .z, .x)
-                .mul(&other.swizzle(.z, .x, .y));
+                .mul(other.swizzle(.z, .x, .y));
             const s2 = self.swizzle(.z, .x, .y)
-                .mul(&other.swizzle(.y, .z, .x));
-            return s1.sub(&s2);
+                .mul(other.swizzle(.y, .z, .x));
+            return s1.sub(s2);
         }
     };
 }
@@ -232,7 +235,16 @@ pub fn Vec(comptime ImplT: type) type {
         }
 
         pub inline fn abs(self: Self) Self {
-            return .{ .data = @abs(self.data) };
+            return .{
+                .data = switch (@typeInfo(ScalarT)) {
+                    inline .int => |IntType| switch (IntType.signedness) {
+                        .signed => @intCast(@abs(self.data)),
+                        .unsigned => @abs(self.data),
+                    },
+                    inline .float => @abs(self.data),
+                    else => @compileError("Unsupported type for abs(): " ++ @typeName(ScalarT)),
+                },
+            };
         }
 
         pub inline fn normalize(self: Self) Self {
@@ -293,4 +305,325 @@ pub fn VecTypeForN(comptime n: usize, comptime T: type) type {
         4 => Vec4(T),
         else => @compileError("Unsupported vector dimension: " ++ std.fmt.comptimePrint("{}", .{n})),
     };
+}
+
+test "Vec2: initialization and components" {
+    const V = Vec2(f32);
+    const v = V.init(3.0, 4.0);
+
+    try std.testing.expectEqual(@as(f32, 3.0), v.x());
+    try std.testing.expectEqual(@as(f32, 4.0), v.y());
+}
+
+test "Vec2: add and sub" {
+    const V = Vec2(f32);
+    const a = V.init(2.0, 3.0);
+    const b = V.init(1.0, 5.0);
+
+    const sum = a.add(b);
+    try std.testing.expectEqual(@as(f32, 3.0), sum.x());
+    try std.testing.expectEqual(@as(f32, 8.0), sum.y());
+
+    const diff = a.sub(b);
+    try std.testing.expectEqual(@as(f32, 1.0), diff.x());
+    try std.testing.expectEqual(@as(f32, -2.0), diff.y());
+}
+
+test "Vec2: scalar arithmetic" {
+    const V = Vec2(f32);
+    const v = V.init(2.0, 4.0);
+
+    const add_s = v.addScalar(1.0);
+    try std.testing.expectEqual(@as(f32, 3.0), add_s.x());
+    try std.testing.expectEqual(@as(f32, 5.0), add_s.y());
+
+    const sub_s = v.subScalar(1.0);
+    try std.testing.expectEqual(@as(f32, 1.0), sub_s.x());
+    try std.testing.expectEqual(@as(f32, 3.0), sub_s.y());
+
+    const mul_s = v.mulScalar(2.0);
+    try std.testing.expectEqual(@as(f32, 4.0), mul_s.x());
+    try std.testing.expectEqual(@as(f32, 8.0), mul_s.y());
+
+    const div_s = v.divScalar(2.0);
+    try std.testing.expectEqual(@as(f32, 1.0), div_s.x());
+    try std.testing.expectEqual(@as(f32, 2.0), div_s.y());
+}
+
+test "Vec2: length and distance" {
+    const V = Vec2(f32);
+    const a = V.init(3.0, 4.0);
+    const b = V.init(6.0, 8.0);
+
+    // len should be sqrt(3² + 4²) = 5
+    try std.testing.expectApproxEqAbs(@as(f32, 5.0), a.len(), 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f32, 25.0), a.lenSq(), 1e-6);
+
+    // distance between (3,4) and (6,8) = 5
+    try std.testing.expectApproxEqAbs(@as(f32, 5.0), a.distance(b), 1e-6);
+}
+
+test "Vec2: abs and splat" {
+    const V = Vec2(i32);
+    const v = V.init(-3, 4);
+    const abs_v = v.abs();
+
+    try std.testing.expectEqual(@as(i32, 3), abs_v.x());
+    try std.testing.expectEqual(@as(i32, 4), abs_v.y());
+
+    const s = V.splat(5);
+    try std.testing.expectEqual(@as(i32, 5), s.x());
+    try std.testing.expectEqual(@as(i32, 5), s.y());
+}
+
+test "Vec2: ceil, divFloor, to" {
+    const V = Vec2(f32);
+    const v = V.init(1.2, 3.8);
+    const c = v.ceil();
+    try std.testing.expectEqual(@as(f32, 2.0), c.x());
+    try std.testing.expectEqual(@as(f32, 4.0), c.y());
+
+    const a = V.init(5.0, 9.0);
+    const b = V.init(2.0, 4.0);
+    const divf = a.divFloor(b);
+    try std.testing.expectEqual(@as(f32, 2.0), divf.x());
+    try std.testing.expectEqual(@as(f32, 2.0), divf.y());
+
+    const to = v.to(f32);
+    try std.testing.expectEqual(@as(f32, 1.2), to.x());
+    try std.testing.expectEqual(@as(f32, 3.8), to.y());
+}
+
+test "Vec3: initialization and components" {
+    const V = Vec3(f32);
+    const v = V.init(1.0, 2.0, 3.0);
+
+    try std.testing.expectEqual(@as(f32, 1.0), v.x());
+    try std.testing.expectEqual(@as(f32, 2.0), v.y());
+    try std.testing.expectEqual(@as(f32, 3.0), v.z());
+}
+
+test "Vec3: add and sub" {
+    const V = Vec3(f32);
+    const a = V.init(2.0, 3.0, 4.0);
+    const b = V.init(1.0, 5.0, 7.0);
+
+    const sum = a.add(b);
+    try std.testing.expectEqual(@as(f32, 3.0), sum.x());
+    try std.testing.expectEqual(@as(f32, 8.0), sum.y());
+    try std.testing.expectEqual(@as(f32, 11.0), sum.z());
+
+    const diff = a.sub(b);
+    try std.testing.expectEqual(@as(f32, 1.0), diff.x());
+    try std.testing.expectEqual(@as(f32, -2.0), diff.y());
+    try std.testing.expectEqual(@as(f32, -3.0), diff.z());
+}
+
+test "Vec3: scalar arithmetic" {
+    const V = Vec3(f32);
+    const v = V.init(2.0, 4.0, 6.0);
+
+    const add_s = v.addScalar(1.0);
+    try std.testing.expectEqual(@as(f32, 3.0), add_s.x());
+    try std.testing.expectEqual(@as(f32, 5.0), add_s.y());
+    try std.testing.expectEqual(@as(f32, 7.0), add_s.z());
+
+    const sub_s = v.subScalar(1.0);
+    try std.testing.expectEqual(@as(f32, 1.0), sub_s.x());
+    try std.testing.expectEqual(@as(f32, 3.0), sub_s.y());
+    try std.testing.expectEqual(@as(f32, 5.0), sub_s.z());
+
+    const mul_s = v.mulScalar(2.0);
+    try std.testing.expectEqual(@as(f32, 4.0), mul_s.x());
+    try std.testing.expectEqual(@as(f32, 8.0), mul_s.y());
+    try std.testing.expectEqual(@as(f32, 12.0), mul_s.z());
+
+    const div_s = v.divScalar(2.0);
+    try std.testing.expectEqual(@as(f32, 1.0), div_s.x());
+    try std.testing.expectEqual(@as(f32, 2.0), div_s.y());
+    try std.testing.expectEqual(@as(f32, 3.0), div_s.z());
+}
+
+test "Vec3: length and distance" {
+    const V = Vec3(f32);
+    const a = V.init(1.0, 2.0, 2.0);
+    const b = V.init(4.0, 6.0, 6.0);
+
+    // len = sqrt(1² + 2² + 2²) = 3
+    try std.testing.expectApproxEqAbs(@as(f32, 3.0), a.len(), 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f32, 9.0), a.lenSq(), 1e-6);
+
+    // distance between (1,2,2) and (4,6,6) = sqrt(3² + 4² + 4²) = sqrt(41)
+    const expected_distance = @as(f32, std.math.sqrt(41.0));
+    try std.testing.expectApproxEqAbs(expected_distance, a.distance(b), 1e-6);
+}
+
+test "Vec3: abs and splat" {
+    const V = Vec3(i32);
+    const v = V.init(-3, 4, -5);
+    const abs_v = v.abs();
+
+    try std.testing.expectEqual(@as(i32, 3), abs_v.x());
+    try std.testing.expectEqual(@as(i32, 4), abs_v.y());
+    try std.testing.expectEqual(@as(i32, 5), abs_v.z());
+
+    const s = V.splat(9);
+    try std.testing.expectEqual(@as(i32, 9), s.x());
+    try std.testing.expectEqual(@as(i32, 9), s.y());
+    try std.testing.expectEqual(@as(i32, 9), s.z());
+}
+
+test "Vec3: ceil, divFloor, to" {
+    const V = Vec3(f32);
+    const v = V.init(1.2, 3.8, 4.1);
+    const c = v.ceil();
+    try std.testing.expectEqual(@as(f32, 2.0), c.x());
+    try std.testing.expectEqual(@as(f32, 4.0), c.y());
+    try std.testing.expectEqual(@as(f32, 5.0), c.z());
+
+    const a = V.init(9.0, 10.0, 11.0);
+    const b = V.init(2.0, 4.0, 5.0);
+    const divf = a.divFloor(b);
+    try std.testing.expectEqual(@as(f32, 4.0), divf.x());
+    try std.testing.expectEqual(@as(f32, 2.0), divf.y());
+    try std.testing.expectEqual(@as(f32, 2.0), divf.z());
+
+    const to = v.to(f32);
+    try std.testing.expectEqual(@as(f32, 1.2), to.x());
+    try std.testing.expectEqual(@as(f32, 3.8), to.y());
+    try std.testing.expectEqual(@as(f32, 4.1), to.z());
+}
+
+test "Vec3: cross product" {
+    const V = Vec3(f32);
+    const a = V.init(1.0, 0.0, 0.0);
+    const b = V.init(0.0, 1.0, 0.0);
+    const cross = a.cross(b);
+
+    // (1,0,0) × (0,1,0) = (0,0,1)
+    try std.testing.expectApproxEqAbs(@as(f32, 0.0), cross.x(), 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.0), cross.y(), 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f32, 1.0), cross.z(), 1e-6);
+}
+
+test "Vec3: swizzle" {
+    const V = Vec3(f32);
+    const v = V.init(1.0, 2.0, 3.0);
+    const swz = v.swizzle(.z, .y, .x);
+
+    try std.testing.expectEqual(@as(f32, 3.0), swz.x());
+    try std.testing.expectEqual(@as(f32, 2.0), swz.y());
+    try std.testing.expectEqual(@as(f32, 1.0), swz.z());
+}
+
+test "Vec4: initialization and components" {
+    const V = Vec4(f32);
+    const v = V.init(1.0, 2.0, 3.0, 4.0);
+
+    try std.testing.expectEqual(@as(f32, 1.0), v.x());
+    try std.testing.expectEqual(@as(f32, 2.0), v.y());
+    try std.testing.expectEqual(@as(f32, 3.0), v.z());
+    try std.testing.expectEqual(@as(f32, 4.0), v.w());
+}
+
+test "Vec4: add and sub" {
+    const V = Vec4(f32);
+    const a = V.init(1.0, 2.0, 3.0, 4.0);
+    const b = V.init(4.0, 3.0, 2.0, 1.0);
+
+    const sum = a.add(b);
+    try std.testing.expectEqual(@as(f32, 5.0), sum.x());
+    try std.testing.expectEqual(@as(f32, 5.0), sum.y());
+    try std.testing.expectEqual(@as(f32, 5.0), sum.z());
+    try std.testing.expectEqual(@as(f32, 5.0), sum.w());
+
+    const diff = a.sub(b);
+    try std.testing.expectEqual(@as(f32, -3.0), diff.x());
+    try std.testing.expectEqual(@as(f32, -1.0), diff.y());
+    try std.testing.expectEqual(@as(f32, 1.0), diff.z());
+    try std.testing.expectEqual(@as(f32, 3.0), diff.w());
+}
+
+test "Vec4: scalar arithmetic" {
+    const V = Vec4(f32);
+    const v = V.init(1.0, 2.0, 3.0, 4.0);
+
+    const add_s = v.addScalar(1.0);
+    try std.testing.expectEqual(@as(f32, 2.0), add_s.x());
+    try std.testing.expectEqual(@as(f32, 3.0), add_s.y());
+    try std.testing.expectEqual(@as(f32, 4.0), add_s.z());
+    try std.testing.expectEqual(@as(f32, 5.0), add_s.w());
+
+    const sub_s = v.subScalar(1.0);
+    try std.testing.expectEqual(@as(f32, 0.0), sub_s.x());
+    try std.testing.expectEqual(@as(f32, 1.0), sub_s.y());
+    try std.testing.expectEqual(@as(f32, 2.0), sub_s.z());
+    try std.testing.expectEqual(@as(f32, 3.0), sub_s.w());
+
+    const mul_s = v.mulScalar(2.0);
+    try std.testing.expectEqual(@as(f32, 2.0), mul_s.x());
+    try std.testing.expectEqual(@as(f32, 4.0), mul_s.y());
+    try std.testing.expectEqual(@as(f32, 6.0), mul_s.z());
+    try std.testing.expectEqual(@as(f32, 8.0), mul_s.w());
+
+    const div_s = v.divScalar(2.0);
+    try std.testing.expectEqual(@as(f32, 0.5), div_s.x());
+    try std.testing.expectEqual(@as(f32, 1.0), div_s.y());
+    try std.testing.expectEqual(@as(f32, 1.5), div_s.z());
+    try std.testing.expectEqual(@as(f32, 2.0), div_s.w());
+}
+
+test "Vec4: length and distance" {
+    const V = Vec4(f32);
+    const a = V.init(1.0, 2.0, 2.0, 1.0);
+    const b = V.init(4.0, 6.0, 6.0, 3.0);
+
+    // len = sqrt(1² + 2² + 2² + 1²) = sqrt(10) ≈ 3.1622777
+    try std.testing.expectApproxEqAbs(@as(f32, std.math.sqrt(10.0)), a.len(), 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f32, 10.0), a.lenSq(), 1e-6);
+
+    // distance = sqrt((3)² + (4)² + (4)² + (2)²) = sqrt(45) ≈ 6.708204
+    const expected_dist = @as(f32, std.math.sqrt(45.0));
+    try std.testing.expectApproxEqAbs(expected_dist, a.distance(b), 1e-6);
+}
+
+test "Vec4: abs and splat" {
+    const V = Vec4(i32);
+    const v = V.init(-1, 2, -3, 4);
+    const abs_v = v.abs();
+
+    try std.testing.expectEqual(@as(i32, 1), abs_v.x());
+    try std.testing.expectEqual(@as(i32, 2), abs_v.y());
+    try std.testing.expectEqual(@as(i32, 3), abs_v.z());
+    try std.testing.expectEqual(@as(i32, 4), abs_v.w());
+
+    const s = V.splat(9);
+    try std.testing.expectEqual(@as(i32, 9), s.x());
+    try std.testing.expectEqual(@as(i32, 9), s.y());
+    try std.testing.expectEqual(@as(i32, 9), s.z());
+    try std.testing.expectEqual(@as(i32, 9), s.w());
+}
+
+test "Vec4: ceil, divFloor, to" {
+    const V = Vec4(f32);
+    const v = V.init(1.2, 3.8, 4.1, 5.9);
+    const c = v.ceil();
+    try std.testing.expectEqual(@as(f32, 2.0), c.x());
+    try std.testing.expectEqual(@as(f32, 4.0), c.y());
+    try std.testing.expectEqual(@as(f32, 5.0), c.z());
+    try std.testing.expectEqual(@as(f32, 6.0), c.w());
+
+    const a = V.init(9.0, 10.0, 11.0, 12.0);
+    const b = V.init(2.0, 4.0, 5.0, 6.0);
+    const divf = a.divFloor(b);
+    try std.testing.expectEqual(@as(f32, 4.0), divf.x());
+    try std.testing.expectEqual(@as(f32, 2.0), divf.y());
+    try std.testing.expectEqual(@as(f32, 2.0), divf.z());
+    try std.testing.expectEqual(@as(f32, 2.0), divf.w());
+
+    const to = v.to(f32);
+    try std.testing.expectEqual(@as(f32, 1.2), to.x());
+    try std.testing.expectEqual(@as(f32, 3.8), to.y());
+    try std.testing.expectEqual(@as(f32, 4.1), to.z());
+    try std.testing.expectEqual(@as(f32, 5.9), to.w());
 }
