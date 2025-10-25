@@ -32,7 +32,7 @@ pub inline fn isErrorUnion(value: anytype) void {
     comptime debug.assert(@typeInfo(@TypeOf(value)) == .error_union);
 }
 
-/// Asserts at comptime that the given value is of error union type.
+/// Asserts at comptime that the given value is of error set type.
 pub inline fn isError(value: anytype) void {
     comptime debug.assert(@typeInfo(@TypeOf(value)) == .error_set);
 }
