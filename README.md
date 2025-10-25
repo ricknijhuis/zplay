@@ -5,7 +5,7 @@
 ## Features
 Here are some features the project aims to provide. As the project is in very early development, lots of these features
 might only work minimally or not work at all.
-*   Managing windows(Multiple windows, multiple monitor)
+*   Managing windows (Multiple windows, multiple monitor)
 *   Input event handling using keyboard, mouse and controllers
 *   Rendering using vulkan with batching support and zig shaders
 *   Audio playback
