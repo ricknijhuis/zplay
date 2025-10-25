@@ -34,7 +34,7 @@ pub fn primary() !Win32Monitor {
 
 pub fn closest(window: Win32Window) error{MonitorNotFound}!Handle {
     const monitor = c.MonitorFromWindow(window.window, c.MONITOR_DEFAULTTONEAREST);
-    return errors.throwIfNull(monitor, MonitorHandle.Error.MonitorNotFound, "Monitor not found by window handle");
+    return errors.throwIfNull(monitor, MonitorHandle.QueryMonitorError.MonitorNotFound, "Monitor not found by window handle");
 }
 
 /// Polls the system for connected monitors and updates the monitor handles accordingly.
@@ -84,7 +84,7 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
                 if (handle.handle != .none) {
                     const monitor = instance.monitors.getPtr(handle.handle);
                     // If eql, device is still connected but might need updating
-                    if (std.mem.eql(u16, &monitor.handle.windows.name, &device.DeviceName)) {
+                    if (std.mem.eql(u16, &monitor.native.name, &device.DeviceName)) {
                         monitor.connected = true;
                         monitor.primary = is_primary;
 
@@ -119,8 +119,8 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
             new_monitor.connected = true;
             new_monitor.primary = is_primary;
 
-            @memcpy(&new_monitor.handle.windows.name, &device.DeviceString);
-            @memcpy(&new_monitor.handle.windows.adapter, &device.DeviceName);
+            @memcpy(&new_monitor.native.name, &device.DeviceString);
+            @memcpy(&new_monitor.native.adapter, &device.DeviceName);
         }
     }
 }
@@ -154,7 +154,7 @@ fn monitorCallback(
     _ = hdc;
     const monitor_ptr: *Monitor = @ptrFromInt(@as(usize, @intCast(data)));
     // Docs mention monitor can never be null: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nc-winuser-monitorenumproc
-    monitor_ptr.handle.windows.monitor = monitor.?;
+    monitor_ptr.native.monitor = monitor.?;
 
     return c.TRUE;
 }

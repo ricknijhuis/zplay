@@ -102,7 +102,7 @@ pub fn panicIfError(value: anytype, msg: []const u8) @typeInfo(@TypeOf(value)).e
 /// Logs the given message and returns the given error.
 /// Should either be used in combination with try, catch or return.
 /// Should be used instead of directly returning the error to ensure consistent logging.
-pub fn throw(err: anytype, msg: []const u8) @TypeOf(err)!void {
+pub fn throw(err: anytype, msg: []const u8) @TypeOf(err) {
     asserts.isError(err);
 
     std.log.err("{s}", .{msg});

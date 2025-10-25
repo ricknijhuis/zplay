@@ -74,19 +74,17 @@ pub fn closest(window_handle: WindowHandle) Error!MonitorHandle {
     const window = instance.windows.getPtr(window_handle.handle);
     const monitors = try all();
 
-    switch (window.handle) {
-        inline else => |native_window| {
-            const native_monitor = try Win32Monitor.closest(native_window);
-            for (monitors) |monitor_handle| {
-                const monitor = instance.monitors.getPtr(monitor_handle.handle);
-                if (monitor.handle.windows.monitor == native_monitor) {
-                    return monitor_handle;
-                }
-            }
+    const native_window = window.native;
+    const native_monitor = try Monitor.Native.closest(native_window);
 
-            return errors.throw(Error.MonitorNotFound, "No monitor found");
-        },
+    for (monitors) |monitor_handle| {
+        const monitor = instance.monitors.getPtr(monitor_handle.handle);
+        if (monitor.native.monitor == native_monitor) {
+            return monitor_handle;
+        }
     }
+
+    return errors.throw(Error.MonitorNotFound, "No monitor found");
 }
 
 /// Returns the device name of the monitor.
@@ -108,10 +106,5 @@ pub fn getWorkArea(self: MonitorHandle) Rect(i32) {
 pub fn poll() PollMonitorError!void {
     core.asserts.isOnThread(instance.main_thread);
 
-    switch (builtin.os.tag) {
-        .windows => {
-            try Win32Monitor.poll();
-        },
-        else => @compileError("Platform not 'yet' supported"),
-    }
+    try Monitor.Native.poll();
 }
