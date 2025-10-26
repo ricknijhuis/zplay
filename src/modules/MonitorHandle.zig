@@ -33,6 +33,13 @@ pub const QueryMonitorError = error{
     MonitorNotFound,
 };
 
+/// Represents information about a display mode supported by a monitor.
+pub const DisplayInfo = struct {
+    width: u32,
+    height: u32,
+    refresh_rate: u32,
+};
+
 /// All possible errors that can occur when dealing with monitors.
 pub const Error = std.mem.Allocator.Error || PollMonitorError || QueryMonitorError;
 
@@ -94,15 +101,30 @@ pub fn getName(self: MonitorHandle) []const u8 {
 }
 
 /// Returns the work area of the monitor, excluding taskbars and docked windows.
-pub fn getWorkArea(self: MonitorHandle) Rect(i32) {
+pub fn getWorkArea(self: MonitorHandle) QueryMonitorError!Rect(i32) {
     core.asserts.isOnThread(instance.main_thread);
 
     const monitor = instance.monitors.getPtr(self.handle);
-    return switch (monitor.handle) {
-        inline else => |*native| native.getWorkArea(),
-    };
+    return monitor.native.getWorkArea();
 }
 
+/// Returns the full area of the monitor, including taskbars and docked windows.
+pub fn getFullArea(self: MonitorHandle) QueryMonitorError!Rect(i32) {
+    core.asserts.isOnThread(instance.main_thread);
+
+    const monitor = instance.monitors.getPtr(self.handle);
+    return monitor.native.getFullArea();
+}
+
+/// Returns the display information of the monitor, including size and refresh rate.
+pub fn getDisplayInfo(self: MonitorHandle) QueryMonitorError!DisplayInfo {
+    core.asserts.isOnThread(instance.main_thread);
+
+    const monitor = instance.monitors.getPtr(self.handle);
+    return monitor.native.getDisplayInfo();
+}
+
+/// Polls the operating system for connected monitors and updates the internal monitor list.
 pub fn poll() PollMonitorError!void {
     core.asserts.isOnThread(instance.main_thread);
 

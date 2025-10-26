@@ -16,7 +16,7 @@ const instance = &context.instance;
 
 pub const CreateWindowError = error{
     NativeWindowCreationFailed,
-};
+} || MonitorHandle.QueryMonitorError;
 
 pub const Error = std.mem.Allocator.Error || CreateWindowError;
 
@@ -44,7 +44,7 @@ pub const Mode = union(ModeType) {
     /// A standard window with borders and title bar.
     windowed: ModeState,
     /// A borderless window that covers the entire screen but is not in exclusive fullscreen mode.
-    borderless: ModeState,
+    borderless: MonitorHandle,
     /// An exclusive fullscreen window that takes over the entire screen of the given monitor.
     fullscreen: MonitorHandle,
 };

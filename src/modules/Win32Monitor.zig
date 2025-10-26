@@ -125,12 +125,11 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
     }
 }
 
-pub fn getWorkArea(self: *const Win32Monitor) Rect(i32) {
+pub fn getWorkArea(self: *const Win32Monitor) MonitorHandle.QueryMonitorError!Rect(i32) {
     var monitor_info: c.MONITORINFO = std.mem.zeroes(c.MONITORINFO);
     monitor_info.cbSize = @sizeOf(c.MONITORINFO);
 
-    // Monitor handle should always be valid here
-    debug.assert(c.GetMonitorInfoW(self.monitor, &monitor_info) != 0);
+    try errors.throwIfZero(c.GetMonitorInfoW(self.monitor, &monitor_info), MonitorHandle.QueryMonitorError.MonitorNotFound, "Monitor not found");
 
     return .{
         .position = .init(
@@ -141,6 +140,37 @@ pub fn getWorkArea(self: *const Win32Monitor) Rect(i32) {
             @intCast(monitor_info.rcWork.right - monitor_info.rcWork.left),
             @intCast(monitor_info.rcWork.bottom - monitor_info.rcWork.top),
         ),
+    };
+}
+
+pub fn getFullArea(self: *const Win32Monitor) MonitorHandle.QueryMonitorError!Rect(i32) {
+    var monitor_info: c.MONITORINFO = std.mem.zeroes(c.MONITORINFO);
+    monitor_info.cbSize = @sizeOf(c.MONITORINFO);
+
+    try errors.throwIfZero(c.GetMonitorInfoW(self.monitor, &monitor_info), MonitorHandle.QueryMonitorError.MonitorNotFound, "Monitor not found");
+
+    return .{
+        .position = .init(
+            @intCast(monitor_info.rcMonitor.left),
+            @intCast(monitor_info.rcMonitor.top),
+        ),
+        .size = .init(
+            @intCast(monitor_info.rcMonitor.right - monitor_info.rcMonitor.left),
+            @intCast(monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top),
+        ),
+    };
+}
+
+pub fn getDisplayMode(self: *const Win32Monitor) MonitorHandle.QueryMonitorError!MonitorHandle.DisplayMode {
+    var device_mode: c.DEVMODEW = std.mem.zeroes(c.DEVMODEW);
+    device_mode.dmSize = @sizeOf(c.DEVMODEW);
+
+    try errors.throwIfZero(c.EnumDisplaySettingsW(self.adapter, c.ENUM_CURRENT_SETTINGS, &device_mode), MonitorHandle.QueryMonitorError.MonitorNotFound, "Monitor not found");
+
+    return .{
+        .width = @intCast(device_mode.dmPelsWidth),
+        .height = @intCast(device_mode.dmPelsHeight),
+        .refresh_rate = @intCast(device_mode.dmDisplayFrequency),
     };
 }
 

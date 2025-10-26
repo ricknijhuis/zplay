@@ -8,7 +8,7 @@ const utf8ToUtf16Lit = std.unicode.utf8ToUtf16LeStringLiteral;
 const utf8ToUtf16 = std.unicode.utf8ToUtf16LeAllocZ;
 
 const WindowHandle = @import("WindowHandle.zig");
-const Win32WMonitor = @import("Win32Monitor.zig");
+const MonitorHandle = @import("MonitorHandle.zig");
 const InitParams = WindowHandle.InitParams;
 const Mode = WindowHandle.Mode;
 
@@ -19,7 +19,7 @@ const atom_name = utf8ToUtf16Lit("zplay");
 
 window: c.HWND,
 
-pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
+pub fn init(handle: WindowHandle, params: InitParams) MonitorHandle.QueryMonitorError!Win32Window {
     const gpa = instance.gpa;
 
     const h_instance: c.HINSTANCE = errors.panicIfNull(c.GetModuleHandleW(null), "Unable to get HINSTANCE");
@@ -52,74 +52,131 @@ pub fn init(handle: WindowHandle, params: InitParams) !Win32Window {
     const style = getWindowStyle(params.mode);
     const style_ex = getWindowStyleEx(params.mode);
 
+    var pos_x: i32 = c.CW_USEDEFAULT;
+    var pos_y: i32 = c.CW_USEDEFAULT;
+    var width: i32 = @intCast(params.width);
+    var height: i32 = @intCast(params.height);
+
+    switch (params.mode) {
+        .fullscreen, .borderless => |monitor_handle| {
+            const rect = try monitor_handle.getFullArea();
+            pos_x = rect.x();
+            pos_y = rect.y();
+            width = rect.width();
+            height = rect.height();
+        },
+        .windowed => {},
+    }
+
     // TODO: Handle multi monitor setups.
     // TODO: Handle DPI scaling.
-    const window = errors.panicIfNull(c.CreateWindowExW(
+    const native_window = errors.panicIfNull(c.CreateWindowExW(
         style_ex,
         atom_name,
         title,
         style,
-        c.CW_USEDEFAULT,
-        c.CW_USEDEFAULT,
-        @intCast(params.width),
-        @intCast(params.height),
+        pos_x,
+        pos_y,
+        width,
+        height,
         null,
         null,
         h_instance,
         null,
     ), "Failed to create native window");
 
+    const window: Win32Window = .{
+        .window = native_window,
+    };
+
     // Annoyingly, SetWindowLongPtrW can return 0 on both success and failure, so we have to check GetLastError to see if it actually failed.
     c.SetLastError(.NO_ERROR);
-    const result = c.SetWindowLongPtrW(window, .P_USERDATA, @intCast(handle.handle.toInt()));
+    const result = c.SetWindowLongPtrW(native_window, .P_USERDATA, @intCast(handle.handle.toInt()));
     const err = c.GetLastError();
     errors.panicIfNotTrue(!(result == 0 and err != .NO_ERROR), "Failed to set window long ptr");
 
     switch (params.mode) {
-        .fullscreen => {
-            _ = c.ShowWindow(window, c.SW_SHOWMAXIMIZED);
+        .fullscreen, .borderless => {
+            _ = c.SetWindowPos(
+                native_window,
+                c.HWND_TOPMOST,
+                pos_x,
+                pos_y,
+                width,
+                height,
+                .{
+                    .NOOWNERZORDER = 1,
+                    .DRAWFRAME = 1, // Same as FRAMECHANGED
+                },
+            );
+            window.show();
+            window.focus();
         },
-        .borderless, .windowed => |mode| {
+        .windowed => |mode| {
             switch (mode) {
                 .normal => {
-                    _ = c.ShowWindow(window, c.SW_SHOWNORMAL);
+                    window.show();
+                    window.focus();
                 },
                 .minimized => {
-                    _ = c.ShowWindow(window, c.SW_SHOWMINIMIZED);
+                    window.minimize();
                 },
                 .maximized => {
-                    _ = c.ShowWindow(window, c.SW_SHOWMAXIMIZED);
+                    window.maximize();
+                    window.focus();
                 },
                 .hidden => {
-                    _ = c.ShowWindow(window, c.SW_HIDE);
+                    window.hide();
                 },
             }
         },
     }
 
-    return .{
-        .window = window,
-    };
+    return window;
 }
 
 pub fn deinit(self: *Win32Window) void {
     _ = c.DestroyWindow(self.window);
 }
 
-pub fn maximize(self: *Win32Window) void {
+pub fn hide(self: *const Win32Window) void {
+    _ = c.ShowWindow(self.window, c.SW_HIDE);
+}
+
+pub fn show(self: *const Win32Window) void {
+    _ = c.ShowWindow(self.window, c.SW_SHOWNA);
+}
+
+pub fn maximize(self: *const Win32Window) void {
     _ = c.ShowWindow(self.window, c.SW_MAXIMIZE);
 }
 
-pub fn restore(self: *Win32Window) void {
+pub fn restore(self: *const Win32Window) void {
     _ = c.ShowWindow(self.window, c.SW_RESTORE);
 }
 
-pub fn minimize(self: *Win32Window) void {
+pub fn minimize(self: *const Win32Window) void {
     _ = c.ShowWindow(self.window, c.SW_MINIMIZE);
 }
 
-pub fn fullscreen(self: *Win32Window) void {
-    _ = c.ShowWindow(self.window, c.SW_SHOWMAXIMIZED);
+pub fn fullscreen(self: *const Win32Window, monitor: MonitorHandle) MonitorHandle.QueryMonitorError!void {
+    const rect = try monitor.getFullArea();
+
+    _ = c.SetWindowPos(
+        self.window,
+        c.HWND_TOPMOST,
+        rect.x(),
+        rect.y(),
+        rect.width(),
+        rect.height(),
+        c.SWP_FRAMECHANGED | c.SWP_NOOWNERZORDER,
+    );
+}
+
+pub fn focus(self: *const Win32Window) void {
+    _ = c.BringWindowToTop(self.window);
+    _ = c.SetForegroundWindow(self.window);
+    _ = c.SetFocus(self.window);
 }
 
 fn getWindowStyle(mode: Mode) c.WINDOW_STYLE {
@@ -137,7 +194,7 @@ fn getWindowStyle(mode: Mode) c.WINDOW_STYLE {
 fn getWindowStyleEx(mode: Mode) c.WINDOW_EX_STYLE {
     var style_ex: c.WINDOW_EX_STYLE = .{
         .APPWINDOW = 1,
-        .NOREDIRECTIONBITMAP = 1,
+        // .NOREDIRECTIONBITMAP = 1,
     };
     if (mode == .fullscreen or mode == .borderless) {
         style_ex.TOPMOST = 1;
