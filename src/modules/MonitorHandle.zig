@@ -35,8 +35,7 @@ pub const QueryMonitorError = error{
 
 /// Represents information about a display mode supported by a monitor.
 pub const DisplayInfo = struct {
-    width: u32,
-    height: u32,
+    size: core.Vec2u32,
     refresh_rate: u32,
 };
 
@@ -122,6 +121,13 @@ pub fn getDisplayInfo(self: MonitorHandle) QueryMonitorError!DisplayInfo {
 
     const monitor = instance.monitors.getPtr(self.handle);
     return monitor.native.getDisplayInfo();
+}
+
+pub fn setDisplaySize(self: MonitorHandle, size: core.Vec2u32) QueryMonitorError!void {
+    core.asserts.isOnThread(instance.main_thread);
+
+    const monitor = instance.monitors.getPtr(self.handle);
+    return monitor.native.setDisplaySize(size);
 }
 
 /// Polls the operating system for connected monitors and updates the internal monitor list.

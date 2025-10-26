@@ -96,7 +96,7 @@ pub fn init(handle: WindowHandle, params: InitParams) MonitorHandle.QueryMonitor
     errors.panicIfNotTrue(!(result == 0 and err != .NO_ERROR), "Failed to set window long ptr");
 
     switch (params.mode) {
-        .fullscreen, .borderless => {
+        .fullscreen, .borderless => |monitor| {
             _ = c.SetWindowPos(
                 native_window,
                 c.HWND_TOPMOST,
@@ -111,6 +111,10 @@ pub fn init(handle: WindowHandle, params: InitParams) MonitorHandle.QueryMonitor
             );
             window.show();
             window.focus();
+
+            if (params.mode == .fullscreen) {
+                try monitor.setDisplaySize(.init(@intCast(width), @intCast(height)));
+            }
         },
         .windowed => |mode| {
             switch (mode) {

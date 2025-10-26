@@ -120,7 +120,7 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
             new_monitor.primary = is_primary;
 
             @memcpy(&new_monitor.native.name, &device.DeviceString);
-            @memcpy(&new_monitor.native.adapter, &device.DeviceName);
+            @memcpy(&new_monitor.native.adapter, &adapter.DeviceName);
         }
     }
 }
@@ -161,17 +161,41 @@ pub fn getFullArea(self: *const Win32Monitor) MonitorHandle.QueryMonitorError!Re
     };
 }
 
-pub fn getDisplayMode(self: *const Win32Monitor) MonitorHandle.QueryMonitorError!MonitorHandle.DisplayMode {
+pub fn getDisplayInfo(self: *const Win32Monitor) MonitorHandle.QueryMonitorError!MonitorHandle.DisplayInfo {
     var device_mode: c.DEVMODEW = std.mem.zeroes(c.DEVMODEW);
     device_mode.dmSize = @sizeOf(c.DEVMODEW);
 
-    try errors.throwIfZero(c.EnumDisplaySettingsW(self.adapter, c.ENUM_CURRENT_SETTINGS, &device_mode), MonitorHandle.QueryMonitorError.MonitorNotFound, "Monitor not found");
+    try errors.throwIfZero(
+        c.EnumDisplaySettingsW(@ptrCast(&self.adapter), c.ENUM_CURRENT_SETTINGS, &device_mode),
+        MonitorHandle.QueryMonitorError.MonitorNotFound,
+        "Monitor not found",
+    );
 
     return .{
-        .width = @intCast(device_mode.dmPelsWidth),
-        .height = @intCast(device_mode.dmPelsHeight),
-        .refresh_rate = @intCast(device_mode.dmDisplayFrequency),
+        .size = .init(device_mode.dmPelsWidth, device_mode.dmPelsHeight),
+        .refresh_rate = device_mode.dmDisplayFrequency,
     };
+}
+
+pub fn setDisplaySize(self: *const Win32Monitor, size: core.Vec2u32) MonitorHandle.QueryMonitorError!void {
+    var device_mode: c.DEVMODEW = std.mem.zeroes(c.DEVMODEW);
+    device_mode.dmSize = @sizeOf(c.DEVMODEW);
+    device_mode.dmPelsWidth = size.x();
+    device_mode.dmPelsHeight = size.y();
+    device_mode.dmFields = @intCast(c.DM_PELSWIDTH | c.DM_PELSHEIGHT);
+
+    // TODO: Handle other return values
+    try errors.throwIfNotTrue(
+        c.ChangeDisplaySettingsExW(
+            @ptrCast(&self.adapter),
+            &device_mode,
+            null,
+            c.CDS_FULLSCREEN,
+            null,
+        ) == c.DISP_CHANGE_SUCCESSFUL,
+        MonitorHandle.QueryMonitorError.MonitorNotFound,
+        "Failed to change display settings",
+    );
 }
 
 fn monitorCallback(

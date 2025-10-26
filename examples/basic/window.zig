@@ -2,15 +2,17 @@ const std = @import("std");
 const zp = @import("zplay");
 
 const Window = zp.WindowHandle;
+const Monitor = zp.MonitorHandle;
 const Events = zp.Events;
 
 pub fn main() !void {
     try zp.init(null);
     defer zp.deinit();
 
+    const monitor: Monitor = try .primary();
     const window: Window = try .init(.{
         .mode = .{
-            .windowed = .normal,
+            .fullscreen = monitor,
         },
         .title = "ZPlay Window",
         .width = 800,
