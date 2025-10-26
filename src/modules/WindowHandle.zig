@@ -134,3 +134,18 @@ pub fn minimize(self: WindowHandle) void {
     const window = instance.windows.getPtr(self.handle);
     window.native.minimize();
 }
+
+pub fn hide(self: WindowHandle) void {
+    const window = instance.windows.getPtr(self.handle);
+    window.native.hide();
+}
+
+pub fn show(self: WindowHandle) void {
+    const window = instance.windows.getPtr(self.handle);
+    window.native.show();
+}
+
+pub fn focus(self: WindowHandle) void {
+    const window = instance.windows.getPtr(self.handle);
+    window.native.focus();
+}
