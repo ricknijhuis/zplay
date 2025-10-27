@@ -92,7 +92,10 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
                 i += 1;
             }
 
-            // TODO: This check may not be valid; needs testing with multiple monitors
+            // TODO: Verify that the following check correctly identifies disconnected monitors when multiple monitors are present.
+            // Specifically, test with multiple monitors (some connected, some disconnected) to ensure that
+            // 'if (i < instance.monitors.count)' properly skips adding a new monitor if the device matches an existing one.
+            // Expected: Only new, truly disconnected monitors should be added. See issue #<issue-number> for details.
             if (i < instance.monitors.count)
                 continue;
 
