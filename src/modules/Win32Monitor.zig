@@ -92,7 +92,7 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
                 i += 1;
             }
 
-            // TODO: Check is not valid, need to test with multiple monitors
+            // TODO: This check may not be valid; needs testing with multiple monitors
             if (i < instance.monitors.count)
                 continue;
 
