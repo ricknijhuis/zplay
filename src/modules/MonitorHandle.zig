@@ -126,6 +126,7 @@ pub fn getDisplayInfo(self: MonitorHandle) QueryMonitorError!DisplayInfo {
     return monitor.native.getDisplayInfo();
 }
 
+/// Sets the display size of the monitor.
 pub fn setDisplaySize(self: MonitorHandle, size: core.Vec2u32) QueryMonitorError!void {
     core.asserts.isOnThread(instance.main_thread);
 
