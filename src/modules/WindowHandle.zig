@@ -14,6 +14,8 @@ const WindowHandle = @This();
 
 const instance = &context.instance;
 
+/// Includes MonitorHandle.QueryMonitorError because creating a window in borderless or fullscreen mode
+/// requires querying monitor information, which may fail.
 pub const CreateWindowError = error{
     NativeWindowCreationFailed,
 } || MonitorHandle.QueryMonitorError;
