@@ -6,10 +6,8 @@ const builtin = @import("builtin");
 native: Native,
 /// The monitor's user friendly name
 name: String,
-/// Whther the monitor is connected or not
+/// Whether the monitor is connected or not
 connected: bool,
-/// Whether the monitor is the primary monitor
-primary: bool,
 
 const String = @import("core").StringTable.String;
 

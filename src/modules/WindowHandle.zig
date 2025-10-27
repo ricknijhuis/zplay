@@ -14,9 +14,11 @@ const WindowHandle = @This();
 
 const instance = &context.instance;
 
+/// Includes MonitorHandle.QueryMonitorError because creating a window in borderless or fullscreen mode
+/// requires querying monitor information, which may fail.
 pub const CreateWindowError = error{
     NativeWindowCreationFailed,
-};
+} || MonitorHandle.QueryMonitorError;
 
 pub const Error = std.mem.Allocator.Error || CreateWindowError;
 
@@ -44,7 +46,7 @@ pub const Mode = union(ModeType) {
     /// A standard window with borders and title bar.
     windowed: ModeState,
     /// A borderless window that covers the entire screen but is not in exclusive fullscreen mode.
-    borderless: ModeState,
+    borderless: MonitorHandle,
     /// An exclusive fullscreen window that takes over the entire screen of the given monitor.
     fullscreen: MonitorHandle,
 };
@@ -133,4 +135,19 @@ pub fn restore(self: WindowHandle) void {
 pub fn minimize(self: WindowHandle) void {
     const window = instance.windows.getPtr(self.handle);
     window.native.minimize();
+}
+
+pub fn hide(self: WindowHandle) void {
+    const window = instance.windows.getPtr(self.handle);
+    window.native.hide();
+}
+
+pub fn show(self: WindowHandle) void {
+    const window = instance.windows.getPtr(self.handle);
+    window.native.show();
+}
+
+pub fn focus(self: WindowHandle) void {
+    const window = instance.windows.getPtr(self.handle);
+    window.native.focus();
 }
