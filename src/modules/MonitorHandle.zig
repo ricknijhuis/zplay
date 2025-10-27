@@ -50,12 +50,15 @@ handle: Handle,
 /// If no primary monitor is found, it returns the first monitor found.
 /// If no monitors are found, it returns 'NoMonitorsFound'.
 /// If out of memory occurs, it returns 'OutOfMemory'.
-pub fn primary() PollMonitorError!MonitorHandle {
+pub fn primary() Error!MonitorHandle {
+    core.asserts.isOnThread(instance.main_thread);
+
     const handles = try all();
+    const native_primary = try Monitor.Native.primary();
 
     for (handles) |handle| {
         const monitor = instance.monitors.getPtr(handle.handle);
-        if (monitor.primary) {
+        if (monitor.native.monitor == native_primary) {
             return handle;
         }
     }

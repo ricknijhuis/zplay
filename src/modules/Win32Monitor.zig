@@ -23,16 +23,14 @@ monitor: Handle,
 adapter: [32]u16,
 name: [128]u16,
 
-pub fn primary() !Win32Monitor {
+pub fn primary() MonitorHandle.QueryMonitorError!Handle {
     const top_left: c.POINT = .{ .x = 0, .y = 0 };
     const monitor = c.MonitorFromPoint(top_left, c.MONITOR_DEFAULTTOPRIMARY);
 
-    return .{
-        .monitor = monitor,
-    };
+    return errors.throwIfNull(monitor, MonitorHandle.QueryMonitorError.MonitorNotFound, "Primary monitor not found");
 }
 
-pub fn closest(window: Win32Window) error{MonitorNotFound}!Handle {
+pub fn closest(window: Win32Window) MonitorHandle.QueryMonitorError!Handle {
     const monitor = c.MonitorFromWindow(window.window, c.MONITOR_DEFAULTTONEAREST);
     return errors.throwIfNull(monitor, MonitorHandle.QueryMonitorError.MonitorNotFound, "Monitor not found by window handle");
 }
@@ -53,7 +51,6 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
     var adapter_index: u32 = 0;
 
     while (true) : (adapter_index += 1) {
-        var is_primary: bool = false;
         adapter = mem.zeroes(c.DISPLAY_DEVICEW);
         adapter.cb = @sizeOf(c.DISPLAY_DEVICEW);
 
@@ -64,9 +61,6 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
         // Skip inactive adapters
         if ((adapter.StateFlags & c.DISPLAY_DEVICE_ACTIVE) == 0)
             continue;
-
-        if ((adapter.StateFlags & c.DISPLAY_DEVICE_PRIMARY_DEVICE) != 0)
-            is_primary = true;
 
         var device_index: u32 = 0;
         while (true) : (device_index += 1) {
@@ -86,7 +80,6 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
                     // If eql, device is still connected but might need updating
                     if (std.mem.eql(u16, &monitor.native.name, &device.DeviceName)) {
                         monitor.connected = true;
-                        monitor.primary = is_primary;
 
                         // Set the handle to none to mark it as found
                         handle.handle = .none;
@@ -99,7 +92,7 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
                 i += 1;
             }
 
-            // The monitor already existed, skip adding a new one
+            // TODO: Check is not valid, need to test with multiple monitors
             if (i < instance.monitors.count)
                 continue;
 
@@ -117,7 +110,6 @@ pub fn poll() MonitorHandle.PollMonitorError!void {
             const name = try instance.strings.getOrPut(instance.gpa, utf8_name);
             new_monitor.name = name;
             new_monitor.connected = true;
-            new_monitor.primary = is_primary;
 
             @memcpy(&new_monitor.native.name, &device.DeviceString);
             @memcpy(&new_monitor.native.adapter, &adapter.DeviceName);
