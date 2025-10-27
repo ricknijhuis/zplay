@@ -173,7 +173,7 @@ pub fn fullscreen(self: *const Win32Window, monitor: MonitorHandle) MonitorHandl
         rect.y(),
         rect.width(),
         rect.height(),
-        c.SWP_FRAMECHANGED | c.SWP_NOOWNERZORDER,
+        .{ .DRAWFRAME = 1, .NOOWNERZORDER = 1 },
     );
 }
 
