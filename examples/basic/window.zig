@@ -10,7 +10,6 @@ pub fn main() !void {
     defer zp.deinit();
 
     const keyboard: Keyboard = try .init();
-    _ = keyboard;
     const window: Window = try .init(.{
         .mode = .{
             .windowed = .normal,
@@ -24,6 +23,7 @@ pub fn main() !void {
     const events: Events = try .init();
 
     while (!window.shouldClose()) {
-        try events.poll();
+        try events.poll(.{keyboard});
+        std.Thread.sleep(10000000);
     }
 }
