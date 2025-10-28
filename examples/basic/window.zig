@@ -2,17 +2,18 @@ const std = @import("std");
 const zp = @import("zplay");
 
 const Window = zp.WindowHandle;
-const Monitor = zp.MonitorHandle;
 const Events = zp.Events;
+const Keyboard = zp.KeyboardHandle;
 
 pub fn main() !void {
     try zp.init(null);
     defer zp.deinit();
 
-    const monitor: Monitor = try .primary();
+    const keyboard: Keyboard = try .init();
+    _ = keyboard;
     const window: Window = try .init(.{
         .mode = .{
-            .fullscreen = monitor,
+            .windowed = .normal,
         },
         .title = "ZPlay Window",
         .width = 800,
@@ -23,6 +24,6 @@ pub fn main() !void {
     const events: Events = try .init();
 
     while (!window.shouldClose()) {
-        events.poll();
+        try events.poll();
     }
 }

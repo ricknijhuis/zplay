@@ -15,6 +15,7 @@ const HandleSet = core.HandleSet;
 
 const Window = @import("Window.zig");
 const Monitor = @import("Monitor.zig");
+const Keyboard = @import("Keyboard.zig");
 
 const Context = struct {
     gpa: Allocator,
@@ -22,6 +23,7 @@ const Context = struct {
     main_thread: Thread.Id,
     windows: HandleSet(Window),
     monitors: HandleSet(Monitor),
+    keyboards: HandleSet(Keyboard),
 };
 
 pub var instance: Context = .{
@@ -30,6 +32,7 @@ pub var instance: Context = .{
     .strings = .empty,
     .windows = .empty,
     .monitors = .empty,
+    .keyboards = .empty,
 };
 
 var debug_allocator: DebugAllocator = .{};
@@ -47,6 +50,7 @@ pub fn init(allocator: ?Allocator) !void {
 }
 
 pub fn deinit() void {
+    instance.keyboards.deinit(instance.gpa);
     instance.windows.deinit(instance.gpa);
     instance.monitors.deinit(instance.gpa);
     instance.strings.deinit(instance.gpa);

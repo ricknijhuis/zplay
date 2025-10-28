@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) void {
         if (b.lazyDependency("win32", .{})) |win32_dep| {
             modules_mod.addImport("win32", win32_dep.module("win32"));
         }
+        modules_mod.link_libc = true;
     }
 
     const zplay_mod = b.addModule("zplay", .{

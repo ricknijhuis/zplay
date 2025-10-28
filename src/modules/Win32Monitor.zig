@@ -14,7 +14,7 @@ const Win32Window = @import("Win32Window.zig");
 const String = core.StringTable.String;
 const Rect = core.Rect;
 
-const Handle = c.HMONITOR;
+pub const Handle = c.HMONITOR;
 const Win32Monitor = @This();
 
 const instance = &context.instance;

@@ -1,30 +1,20 @@
+const builtin = @import("builtin");
 const Events = @This();
 
-const Win32Events = @import("Win32Events.zig");
-
-const Native = union(enum) {
-    windows: Win32Events,
+const Native = switch (builtin.os.tag) {
+    .windows => @import("Win32Events.zig"),
+    else => @compileError("Platform not 'yet' supported"),
 };
 
 native: Native,
 
 pub fn init() !Events {
-    const native: Native = blk: {
-        comptime if (@import("builtin").os.tag == .windows) {
-            break :blk .{ .windows = Win32Events{} };
-        };
-
-        return error.UnsupportedPlatform;
-    };
-
+    const native: Native = .{};
     return Events{
         .native = native,
     };
 }
-pub fn poll(self: *const Events) void {
-    switch (self.native) {
-        inline else => |*platform| {
-            platform.pollEvents();
-        },
-    }
+
+pub fn poll(self: *const Events) !void {
+    try self.native.pollEvents();
 }

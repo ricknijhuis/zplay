@@ -51,19 +51,13 @@ handle: Handle,
 /// If no monitors are found, it returns 'NoMonitorsFound'.
 /// If out of memory occurs, it returns 'OutOfMemory'.
 pub fn primary() Error!MonitorHandle {
-    core.asserts.isOnThread(instance.main_thread);
-
     const handles = try all();
     const native_primary = try Monitor.Native.primary();
 
-    for (handles) |handle| {
-        const monitor = instance.monitors.getPtr(handle.handle);
-        if (monitor.native.monitor == native_primary) {
-            return handle;
-        }
+    if (searchByNativeHandle(handles, native_primary)) |found| {
+        return found;
     }
 
-    // Fallback to first monitor if no primary found
     return handles[0];
 }
 
@@ -86,11 +80,8 @@ pub fn closest(window_handle: WindowHandle) Error!MonitorHandle {
     const native_window = window.native;
     const native_monitor = try Monitor.Native.closest(native_window);
 
-    for (monitors) |monitor_handle| {
-        const monitor = instance.monitors.getPtr(monitor_handle.handle);
-        if (monitor.native.monitor == native_monitor) {
-            return monitor_handle;
-        }
+    if (searchByNativeHandle(monitors, native_monitor)) |found| {
+        return found;
     }
 
     return errors.throw(Error.MonitorNotFound, "No monitor found");
@@ -139,4 +130,14 @@ pub fn poll() PollMonitorError!void {
     core.asserts.isOnThread(instance.main_thread);
 
     try Monitor.Native.poll();
+}
+
+fn searchByNativeHandle(values: []const MonitorHandle, needle: Monitor.Native.Handle) ?MonitorHandle {
+    for (values) |value| {
+        const monitor = instance.monitors.getPtr(value.handle);
+        if (monitor.native.monitor == needle) {
+            return value;
+        }
+    }
+    return null;
 }
