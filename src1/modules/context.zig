@@ -28,12 +28,6 @@ const Context = struct {
     events: Events,
 };
 
-pub const events = struct {
-    pub fn poll(devices: anytype) !void {
-        try instance.events.poll(devices);
-    }
-};
-
 pub var instance: Context = .{
     .gpa = undefined,
     .main_thread = undefined,
@@ -41,7 +35,7 @@ pub var instance: Context = .{
     .windows = .empty,
     .monitors = .empty,
     .keyboards = .empty,
-    .events = .init(),
+    .events = .empty,
 };
 
 var debug_allocator: DebugAllocator = .{};
@@ -70,6 +64,17 @@ pub fn deinit() void {
     }
 }
 
-pub fn get() *Context {
-    return &instance;
-}
+pub const events = struct {
+    pub fn poll(devices: anytype) !void {
+        for (instance.keyboards.items) |keyboard| {
+            keyboard.state = .initFill(.down);
+        }
+        try instance.events.poll(devices);
+    }
+};
+
+pub const keyboard = struct {};
+
+pub const window = struct {
+    pub fn create(config: W)
+};

@@ -9,8 +9,8 @@ pub fn main() !void {
     try zp.init(null);
     defer zp.deinit();
 
-    const keyboard: Keyboard = try .init();
-    const window: Window = try .init(.{
+    const keyboard: Keyboard = try zp.keyboard.init();
+    const window: Window = try zp.window.init(.{
         .mode = .{
             .windowed = .normal,
         },
@@ -18,7 +18,6 @@ pub fn main() !void {
         .width = 800,
         .height = 600,
     });
-    defer window.deinit();
 
     while (!window.shouldClose()) {
         try zp.events.poll(.{keyboard});

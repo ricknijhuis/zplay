@@ -16,10 +16,15 @@ const Win32Events = @This();
 
 const instance = &context.instance;
 
-var buffer: ArrayListAligned(u8, .@"8") = .empty;
-var is_paused_pressed: bool = false;
+buffer: ArrayListAligned(u8, Alignment.of(usize)) = .empty,
+is_paused_pressed: bool = false,
 
-pub fn pollEvents(self: Win32Events, devices: anytype) !void {
+pub fn deinit(self: *Win32Events) void {
+    self.buffer.deinit();
+    self.is_paused_pressed = false;
+}
+
+pub fn pollEvents(self: *Win32Events, devices: anytype) !void {
     try self.processRawInput(devices);
 
     var msg: c.MSG = undefined;
@@ -33,11 +38,9 @@ pub fn pollEvents(self: Win32Events, devices: anytype) !void {
     }
 }
 
-fn processRawInput(self: Win32Events, devices: anytype) !void {
-    _ = self;
-
-    const keyboards: [meta.fieldCountOfType(KeyboardHandle, @TypeOf(devices))]KeyboardHandle = undefined;
-    keyboards = meta.fieldsOfType(KeyboardHandle, devices, keyboards);
+fn processRawInput(self: *Win32Events, devices: anytype) !void {
+    var keyboards: [meta.fieldCountOfType(KeyboardHandle, @TypeOf(devices))]KeyboardHandle = undefined;
+    meta.fieldsOfType(KeyboardHandle, devices, &keyboards);
 
     var size: u32 = 0;
     var count = c.GetRawInputBuffer(null, &size, @intCast(@sizeOf(c.RAWINPUTHEADER)));
@@ -49,15 +52,15 @@ fn processRawInput(self: Win32Events, devices: anytype) !void {
     // Maybe make it configurable later
     size *= 16;
 
-    try buffer.resize(instance.gpa, size);
+    try self.buffer.resize(instance.gpa, size);
 
-    count = c.GetRawInputBuffer(std.mem.bytesAsValue(c.RAWINPUT, buffer.items), &size, @intCast(@sizeOf(c.RAWINPUTHEADER)));
+    count = c.GetRawInputBuffer(std.mem.bytesAsValue(c.RAWINPUT, self.buffer.items), &size, @intCast(@sizeOf(c.RAWINPUTHEADER)));
 
     if (count == -1) {
         return;
     }
 
-    var input: *c.RAWINPUT = std.mem.bytesAsValue(c.RAWINPUT, buffer.items);
+    var input: *c.RAWINPUT = std.mem.bytesAsValue(c.RAWINPUT, self.buffer.items);
 
     var i: u32 = 0;
     while (i < count) : (i += 1) {
@@ -76,13 +79,13 @@ fn processRawInput(self: Win32Events, devices: anytype) !void {
             } else if ((flags & c.RI_KEY_E1) != 0) {
                 scancode |= 0xE100;
             }
-            if (is_paused_pressed) {
+            if (self.is_paused_pressed) {
                 if (scancode == 0x45) {
                     scancode = 0xE11D45;
                 }
-                is_paused_pressed = false;
+                self.is_paused_pressed = false;
             } else if (scancode == 0xE11D) {
-                is_paused_pressed = true;
+                self.is_paused_pressed = true;
             } else if (scancode == 0x54) {
                 // Alt + print screen return scancode 0x54 but we want it to return 0xE037 because 0x54 will not return a name for the key.
                 scancode = 0xE037;
@@ -103,14 +106,16 @@ fn processRawInput(self: Win32Events, devices: anytype) !void {
             const code: Scancode = @enumFromInt(scancode);
             const key: Key = Win32Keyboard.map.get(code);
 
+            std.log.info("key: {any}", .{key});
             for (keyboards) |keyboard_handle| {
-                const keyboard = instance.keyboards.getPtr(keyboard_handle);
+                const keyboard = instance.keyboards.getPtr(keyboard_handle.handle);
                 if (keyboard.native.handle) |handle| {
                     if (handle != input.header.hDevice) {
                         continue;
                     }
-                    keyboard.state.set(key, state);
                 }
+                std.log.info("key: {any}", .{key});
+                keyboard.state.set(key, state);
             }
 
             input = nextRawInputBlock(input);

@@ -7,21 +7,24 @@ const Handle = HandleSet(Keyboard).Handle;
 
 const KeyboardHandle = @This();
 
+/// Error type for keyboard handle initialization
 pub const Error = error{
     FailedToInitialize,
 } || std.mem.Allocator.Error;
 
 const instance = &context.instance;
 
+/// Handle to the keyboard
 handle: Handle,
 
+/// Initialize the keyboard, if no keyboard is initialized
 pub fn init() Error!KeyboardHandle {
-    if (instance.keyboards.count == 0) {
-        try Keyboard.Native.init();
-    }
-
     const handle = try instance.keyboards.addOneExact(instance.gpa);
     const keyboard = instance.keyboards.getPtr(handle);
+
+    keyboard.native = try .init();
+
+    // Set default key state to up.
     keyboard.state = .initFill(.up);
 
     return .{ .handle = handle };

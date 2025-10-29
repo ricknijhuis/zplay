@@ -19,16 +19,17 @@ const Native = switch (builtin.os.tag) {
 
 native: Native,
 
-pub fn init() Events {
-    const native: Native = .{};
-    return Events{
-        .native = native,
-    };
+pub const empty: Events = .{
+    .native = .{},
+};
+
+pub fn deinit(self: *Events) void {
+    self.native.deinit();
 }
 
 /// Polls events for the windows and given devices.
 /// If no devices are given, only window events are processed.
-pub fn poll(self: *const Events, devices: anytype) !void {
+pub fn poll(self: *Events, devices: anytype) !void {
     const T = @TypeOf(devices);
     const info = @typeInfo(T);
 
