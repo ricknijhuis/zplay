@@ -15,6 +15,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const platform_mod = b.createModule(.{});
+
     const modules_mod = b.createModule(.{
         .root_source_file = b.path("src/modules/root.zig"),
         .target = target,
