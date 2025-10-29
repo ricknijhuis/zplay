@@ -27,6 +27,7 @@ pub const KeyboardHandle = mods.KeyboardHandle;
 
 pub const init = mods.context.init;
 pub const deinit = mods.context.deinit;
+pub const events = mods.context.events;
 
 test {
     @import("std").testing.refAllDeclsRecursive(@This());

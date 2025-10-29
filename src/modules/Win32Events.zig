@@ -1,6 +1,8 @@
 const std = @import("std");
 const c = @import("win32").everything;
 const context = @import("context.zig");
+const core = @import("core");
+const meta = core.meta;
 const debug = std.debug;
 
 const KeyboardHandle = @import("KeyboardHandle.zig");
@@ -17,8 +19,8 @@ const instance = &context.instance;
 var buffer: ArrayListAligned(u8, .@"8") = .empty;
 var is_paused_pressed: bool = false;
 
-pub fn pollEvents(self: Win32Events) !void {
-    try self.processRawInput();
+pub fn pollEvents(self: Win32Events, devices: anytype) !void {
+    try self.processRawInput(devices);
 
     var msg: c.MSG = undefined;
     while (c.PeekMessageW(&msg, null, 0, 0, c.PM_REMOVE) != 0) {
@@ -31,11 +33,11 @@ pub fn pollEvents(self: Win32Events) !void {
     }
 }
 
-fn processRawInput(self: Win32Events) !void {
+fn processRawInput(self: Win32Events, devices: anytype) !void {
     _ = self;
-    // const T = @typeInfo(@TypeOf(devices));
-    // comptime debug.assert(T == .@"struct");
-    // comptime debug.assert(T == .@"struct".is_tuple);
+
+    const keyboards: [meta.fieldCountOfType(KeyboardHandle, @TypeOf(devices))]KeyboardHandle = undefined;
+    keyboards = meta.fieldsOfType(KeyboardHandle, devices, keyboards);
 
     var size: u32 = 0;
     var count = c.GetRawInputBuffer(null, &size, @intCast(@sizeOf(c.RAWINPUTHEADER)));
@@ -60,13 +62,13 @@ fn processRawInput(self: Win32Events) !void {
     var i: u32 = 0;
     while (i < count) : (i += 1) {
         if (input.header.dwType == @as(u32, @intFromEnum(c.RIM_TYPEKEYBOARD))) {
-            var pressed: bool = false;
+            var state: Key.State = .up;
             var scancode: u32 = input.data.keyboard.MakeCode;
             const flags = input.data.keyboard.Flags;
             debug.assert(scancode <= 0xff);
 
             if ((flags & c.RI_KEY_BREAK) == 0) {
-                pressed = true;
+                state = .down;
             }
 
             if ((flags & c.RI_KEY_E0) != 0) {
@@ -101,40 +103,24 @@ fn processRawInput(self: Win32Events) !void {
             const code: Scancode = @enumFromInt(scancode);
             const key: Key = Win32Keyboard.map.get(code);
 
-            std.log.info("INPUT: {any} {any}", .{ code, key });
-        }
+            for (keyboards) |keyboard_handle| {
+                const keyboard = instance.keyboards.getPtr(keyboard_handle);
+                if (keyboard.native.handle) |handle| {
+                    if (handle != input.header.hDevice) {
+                        continue;
+                    }
+                    keyboard.state.set(key, state);
+                }
+            }
 
-        input = nextRawInputBlock(input);
+            input = nextRawInputBlock(input);
+        }
     }
 }
 
-fn processKeyboardInput(self: Win32Events, input: *c.RAWINPUT) !void {
-    _ = self;
-    _ = input;
-    std.log.info("KEYBOARD INPUT", .{});
-}
-
-/// Replacement for the win32 API macro NEXTRAWINPUTBLOCK
+// Replacement for the win32 API macro NEXTRAWINPUTBLOCK
 fn nextRawInputBlock(ptr: *c.RAWINPUT) *c.RAWINPUT {
     const next = @intFromPtr(ptr) + ptr.header.dwSize;
     const aligned = Alignment.of(usize).forward(next);
     return @ptrFromInt(aligned);
-}
-
-fn scancodeToKey(scancode: Scancode) Key {
-    var result: u32 = @intFromEnum(scancode);
-    const group_0_end = @intFromEnum(Scancode.nonconvert);
-    const group_1_start = @intFromEnum(Scancode.media_previous);
-    const group_1_end = @intFromEnum(Scancode.launch_media);
-    const group_2_start = @intFromEnum(Scancode.pause);
-
-    if (result >= group_2_start) {
-        result = group_0_end + 1 + (group_1_end - group_1_start) + 1 + (result - group_2_start);
-    } else if (result >= group_1_start) {
-        result = group_0_end + 1 + (result - group_1_start);
-    }
-
-    debug.assert(result <= 0xff);
-
-    return @enumFromInt(result - 1);
 }

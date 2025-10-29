@@ -27,6 +27,11 @@ pub fn init() Error!KeyboardHandle {
     return .{ .handle = handle };
 }
 
+pub fn getKeyState(self: KeyboardHandle, key: Key) Key.State {
+    const keyboard = instance.keyboards.getPtr(self.handle);
+    return keyboard.state.get(key);
+}
+
 /// These keys are based on the US keyboard layout and don't change with different layouts.
 /// They act as physical key identifiers(Scancodes). And thus are safe to use for keybindings.
 /// On US layout key key W returns Key.w while on Azerty layout key Z returns Key.w

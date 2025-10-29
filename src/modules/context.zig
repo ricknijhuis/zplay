@@ -16,6 +16,7 @@ const HandleSet = core.HandleSet;
 const Window = @import("Window.zig");
 const Monitor = @import("Monitor.zig");
 const Keyboard = @import("Keyboard.zig");
+const Events = @import("Events.zig");
 
 const Context = struct {
     gpa: Allocator,
@@ -24,6 +25,13 @@ const Context = struct {
     windows: HandleSet(Window),
     monitors: HandleSet(Monitor),
     keyboards: HandleSet(Keyboard),
+    events: Events,
+};
+
+pub const events = struct {
+    pub fn poll(devices: anytype) !void {
+        try instance.events.poll(devices);
+    }
 };
 
 pub var instance: Context = .{
@@ -33,6 +41,7 @@ pub var instance: Context = .{
     .windows = .empty,
     .monitors = .empty,
     .keyboards = .empty,
+    .events = .init(),
 };
 
 var debug_allocator: DebugAllocator = .{};

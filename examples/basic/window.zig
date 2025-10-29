@@ -20,10 +20,11 @@ pub fn main() !void {
     });
     defer window.deinit();
 
-    const events: Events = try .init();
-
     while (!window.shouldClose()) {
-        try events.poll(.{keyboard});
-        std.Thread.sleep(10000000);
+        try zp.events.poll(.{keyboard});
+
+        if (keyboard.getKeyState(.w) == .down) {
+            std.debug.print("W key is pressed\n", .{});
+        }
     }
 }
