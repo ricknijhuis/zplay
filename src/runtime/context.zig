@@ -5,25 +5,35 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
+const pl = @import("platform");
+const options = @import("options.zig");
+const mem = std.mem;
 const debug = std.debug;
 
-const Allocator = std.mem.Allocator;
-const DebugAllocator = std.heap.DebugAllocator(.{});
+const Allocator = mem.Allocator;
+const EnumArray = std.EnumArray;
+const Deque = std.Deque;
 const StringTable = core.StringTable;
+const String = StringTable.String;
 const Thread = std.Thread;
 const HandleSet = core.HandleSet;
+const KeyboardHandle = @import("KeyboardHandle.zig");
+
+pub const InputDeviceId = union(enum) {
+    keyboard: KeyboardId,
+    mouse: u64,
+    gamepad: u64,
+};
 
 const Context = struct {
     gpa: Allocator,
     strings: StringTable,
     main_thread: Thread.Id,
-    // windows: HandleSet(Window),
-    // monitors: HandleSet(Monitor),
-    // keyboards: HandleSet(Keyboard),
-    // events: Events,
+    windows: HandleSet(Window),
+    monitors: HandleSet(Monitor),
+    keyboards: HandleSet(Keyboard),
+    events: Event,
 };
-
-var debug_allocator: DebugAllocator = .{};
 
 pub var instance: Context = .{
     .gpa = undefined,
@@ -33,29 +43,4 @@ pub var instance: Context = .{
     .monitors = .empty,
     .keyboards = .empty,
     .events = .empty,
-};
-
-// Namespaces operate on the global context, handles operate on created resources in the global context.
-pub const app = struct {
-    pub fn init() !void {}
-    pub fn deinit() !void {}
-};
-
-pub const window = struct {
-    pub fn create() !void {}
-    pub fn destroy() void {}
-};
-
-pub const keyboard = struct {
-    pub fn init() !void {}
-    pub fn deinit() void {}
-};
-
-pub const monitor = struct {
-    pub fn primary() !void {}
-    pub fn closest() !void {}
-};
-
-pub const event = struct {
-    pub fn poll() !void {}
 };

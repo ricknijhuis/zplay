@@ -38,32 +38,6 @@ pub var instance: Context = .{
     .events = .empty,
 };
 
-var debug_allocator: DebugAllocator = .{};
-
-pub fn init(allocator: ?Allocator) !void {
-    if (allocator) |alloc| {
-        instance.gpa = alloc;
-    } else if (builtin.mode == .Debug) {
-        instance.gpa = debug_allocator.allocator();
-    } else {
-        instance.gpa = std.heap.smp_allocator;
-    }
-
-    instance.main_thread = Thread.getCurrentId();
-}
-
-pub fn deinit() void {
-    instance.keyboards.deinit(instance.gpa);
-    instance.windows.deinit(instance.gpa);
-    instance.monitors.deinit(instance.gpa);
-    instance.strings.deinit(instance.gpa);
-
-    if (builtin.mode == .Debug) {
-        // TODO: check for memory leaks
-        _ = debug_allocator.deinit();
-    }
-}
-
 pub const events = struct {
     pub fn poll(devices: anytype) !void {
         for (instance.keyboards.items) |keyboard| {

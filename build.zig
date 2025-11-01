@@ -15,10 +15,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const platform_mod = b.createModule(.{});
-
-    const modules_mod = b.createModule(.{
-        .root_source_file = b.path("src/modules/root.zig"),
+    const platform_mod = b.createModule(.{
+        .root_source_file = b.path("src/platform/root.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
@@ -26,11 +24,21 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const modules_mod = b.createModule(.{
+        .root_source_file = b.path("src/runtime/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "core", .module = core_mod },
+            .{ .name = "platform", .module = platform_mod },
+        },
+    });
+
     if (target.result.os.tag == .windows) {
         if (b.lazyDependency("win32", .{})) |win32_dep| {
-            modules_mod.addImport("win32", win32_dep.module("win32"));
+            platform_mod.addImport("win32", win32_dep.module("win32"));
         }
-        modules_mod.link_libc = true;
+        platform_mod.link_libc = true;
     }
 
     const zplay_mod = b.addModule("zplay", .{
@@ -39,7 +47,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "core", .module = core_mod },
-            .{ .name = "modules", .module = modules_mod },
+            .{ .name = "runtime", .module = modules_mod },
         },
     });
 
