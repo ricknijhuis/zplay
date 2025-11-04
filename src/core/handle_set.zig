@@ -222,6 +222,7 @@ pub fn HandleSet(comptime T: type) type {
             return .fromRaw(dense_handle);
         }
 
+        /// Removes the given handle from the set, swapping it with the last element.
         pub fn swapRemove(self: *Self, handle: Handle) void {
             debug.assert(self.contains(handle));
 

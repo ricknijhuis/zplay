@@ -27,10 +27,19 @@ pub fn main() !void {
         .height = 600,
     });
 
+    // Create a keyboard device to receive keyboard events, once initialized Event.poll() will start sending events to it
+    const keyboard: zp.Keyboard = try .init();
+
     // Checks for window close event in a loop, generally best to do this on your 'main' window.
     while (!window.shouldClose()) {
         // Polls for events for registered devices. Currently only window events are handled. See input.zig for input device event handling.
         try zp.Event.poll();
+
+        // Check if the last reported state of the given key is down
+        if (keyboard.isKeyDown(.escape)) {
+            // Destroys the native window, resulting in corresponding shouldClose flag to be set to true.
+            window.destroy();
+        }
 
         try io.sleep(.fromMilliseconds(10), .cpu_thread);
     }

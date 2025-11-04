@@ -36,3 +36,7 @@ pub inline fn isErrorUnion(value: anytype) void {
 pub inline fn isError(value: anytype) void {
     comptime debug.assert(@typeInfo(@TypeOf(value)) == .error_set);
 }
+
+pub inline fn isPointer(value: anytype) void {
+    comptime debug.assert(@typeInfo(@TypeOf(value)) == .pointer);
+}
