@@ -98,4 +98,19 @@ const examples = [_]Example{
         .path = "examples/basic/window.zig",
         .desc = "A basic window example",
     },
+    .{
+        .name = "input",
+        .path = "examples/basic/input.zig",
+        .desc = "A basic input example",
+    },
+    .{
+        .name = "multiple_windows",
+        .path = "examples/basic/multiple_windows.zig",
+        .desc = "A basic multiple windows example",
+    },
+    .{
+        .name = "multiple_keyboards",
+        .path = "examples/basic/multiple_keyboards.zig",
+        .desc = "A basic multiple keyboard devices example",
+    },
 };

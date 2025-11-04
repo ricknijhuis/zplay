@@ -16,19 +16,35 @@ pub fn main() !void {
 
     const io = threaded.io();
 
-    // Create a window, will be destroyed automatically on app deinit. If you want to destroy it earlier, call window.destroy()
+    // Our primary window
     const window: zp.Window = try .create(.{
         .mode = .{
             // Create a normal windowed mode window with borders and title bar
             .windowed = .normal,
         },
-        .title = "ZPlay Window",
+        .title = "ZPlay Window 1",
+        .width = 800,
+        .height = 600,
+    });
+
+    var window1: zp.Window = try .create(.{
+        .mode = .{
+            // Create a normal windowed mode window with borders and title bar
+            .windowed = .normal,
+        },
+        .title = "ZPlay Window 2",
         .width = 800,
         .height = 600,
     });
 
     // Checks for window close event in a loop, generally best to do this on your 'main' window.
     while (!window.shouldClose()) {
+        // We allow destroying the second window while still keep the main window open
+        // after destroying the window1
+        if (window1.isValid() and window1.shouldClose()) {
+            window1.destroy();
+        }
+
         // Polls for events for registered devices. Currently only window events are handled. See input.zig for input device event handling.
         try zp.Event.poll();
 

@@ -15,19 +15,21 @@ const atom_name = utf8ToUtf16Lit("zplay");
 pub const windowed_style = c.WS_OVERLAPPEDWINDOW;
 pub const windowed_style_ex = c.WS_EX_APPWINDOW;
 
-// 🖥️ True fullscreen (no borders, changes display mode)
+// True fullscreen (no borders, changes display mode)
 pub const fullscreen_style = c.WS_POPUP;
 pub const fullscreen_style_ex = c.WS_EX_APPWINDOW;
 
-// 🪄 Borderless fullscreen window (covers monitor, no display mode change)
+// Borderless fullscreen window (covers monitor, no display mode change)
 pub const fullscreen_borderless_style = c.WS_POPUP;
 pub const fullscreen_borderless_style_ex = c.WS_EX_APPWINDOW;
+
+pub var wnd_class: ?u16 = null;
 
 handle: c.HWND,
 
 pub fn create(gpa: std.mem.Allocator, title: []const u8) !Window {
     const h_instance: c.HINSTANCE = errors.panicIfNull(c.GetModuleHandleW(null), "Unable to get HINSTANCE");
-    {
+    if (wnd_class == null) {
         // TODO: Should we panic here? Maybe return an error instead.
         const window_class: c.WNDCLASSEXW = .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
@@ -48,7 +50,8 @@ pub fn create(gpa: std.mem.Allocator, title: []const u8) !Window {
             .hIconSm = null,
         };
 
-        errors.panicIfZero(c.RegisterClassExW(&window_class), "Failed to register window class");
+        wnd_class = c.RegisterClassExW(&window_class);
+        errors.panicIfZero(wnd_class.?, "Failed to register window class");
     }
 
     const utf16_title = errors.panicIfError(utf8ToUtf16(gpa, title), "Failed to convert window title to UTF-16");
@@ -166,26 +169,41 @@ pub fn focus(self: *const Window) void {
     _ = c.SetFocus(self.handle);
 }
 
-pub fn setUserPointer(self: *const Window, ptr: anytype) void {
-    asserts.isPointer(ptr);
-    _ = c.SetWindowLongPtrW(self.handle, c.GWLP_USERDATA, @intCast(@intFromPtr(ptr)));
+pub fn setUserData(self: *const Window, value: anytype) void {
+    const val: isize = switch (@typeInfo(@TypeOf(value))) {
+        .pointer => @intFromPtr(value),
+        .int, .comptime_int => @intCast(value),
+        else => @compileError("setUserData: expected pointer or integer type"),
+    };
+
+    _ = c.SetWindowLongPtrW(self.handle, c.GWLP_USERDATA, val);
 }
 
-pub fn getUserPointer(self: *const Window, T: type) *T {
-    const ptr_value: usize = @intCast(c.GetWindowLongPtrW(self.handle, c.GWLP_USERDATA));
-    return @ptrFromInt(ptr_value);
+pub fn getUserData(self: *const Window, T: type) T {
+    const raw: isize = @intCast(c.GetWindowLongPtrW(self.handle, c.GWLP_USERDATA));
+
+    return switch (@typeInfo(T)) {
+        .pointer => @ptrFromInt(raw),
+        .int, .comptime_int => @intCast(raw),
+        else => @compileError("getUserData: expected pointer or integer type"),
+    };
 }
 
 fn windowProcedure(hwnd: c.HWND, u_msg: u32, w_param: c.WPARAM, l_param: c.LPARAM) callconv(.c) isize {
     const wnd: Window = .{ .handle = hwnd };
     switch (u_msg) {
         c.WM_CLOSE => {
+            std.log.info("WND {any}", .{hwnd});
             pl.callbacks.onClose(wnd);
-            return c.DefWindowProcW(hwnd, u_msg, w_param, l_param);
+            return 0;
+            // return c.DefWindowProcW(hwnd, u_msg, w_param, l_param);
         },
         c.WM_DISPLAYCHANGE => {
             pl.callbacks.onDisplayChange();
             return c.DefWindowProcW(hwnd, u_msg, w_param, l_param);
+        },
+        c.WM_CHAR => {
+            std.log.info("CHAR", .{});
         },
         c.WM_SIZE,
         c.WM_SETFOCUS,
