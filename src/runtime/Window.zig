@@ -1,63 +1,43 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const core = @import("core");
-const pl = @import("platform");
-const gpa = @import("gpa.zig");
 const app = @import("app.zig");
-const mntr = @import("monitor.zig");
-const str = @import("strings.zig");
-
 const asserts = core.asserts;
 
-const Monitor = mntr.Monitor;
-const String = core.StringTable.String;
+const Allocator = std.mem.Allocator;
+const App = app.App;
 const HandleSet = core.HandleSet;
+const String = core.StringTable.String;
+const Rect = core.Rect;
 
-/// For internal use. Is not exposed through root.zig
+/// Internal representation of a window.
 pub const Internal = struct {
-    var instance: HandleSet(Internal) = undefined;
-
-    native: pl.Window,
+    pub const Impl = switch (builtin.os.tag) {
+        .windows => @import("win32/Window.zig"),
+        else => @compileError("Platform not 'yet' supported"),
+    };
+    pub const Id = core.Id(Internal);
+    impl: Impl,
+    id: Id,
     title: String,
-    width: u32,
-    height: u32,
+    full: Rect(i32),
+    content: Rect(i32),
     should_close: bool,
-
-    pub fn init() !void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
-
-        instance = .empty;
-    }
-    pub fn deinit() void {
-        for (instance.items) |*window| {
-            window.native.destroy();
-        }
-        instance.deinit(gpa.Internal.instance);
-    }
-
-    pub fn getPtr(handle: Window) *Internal {
-        return instance.getPtr(handle.value);
-    }
 };
 
-/// Represents a handle to a window.
+/// A handle to a window.
 pub const Window = struct {
-    /// Includes Monitor.QueryMonitorError because creating a window in borderless or fullscreen mode
-    /// requires querying monitor information, which may fail.
-    pub const CreateWindowError = error{
-        NativeWindowCreationFailed,
-    }; // || Monitor.QueryMonitorError;
-
-    pub const Error = std.mem.Allocator.Error || CreateWindowError;
-
+    /// The Mode defines how the window should be created.
     pub const ModeType = enum {
         /// A standard window with borders and title bar using the given size.
         windowed,
-        /// A borderless window that covers the entire screen but is not in exclusive fullscreen mode.
-        borderless,
-        /// An exclusive fullscreen window that takes over the entire screen of the given monitor.
-        fullscreen,
+        // A borderless window that covers the entire screen but is not in exclusive fullscreen mode.
+        // borderless,
+        // An exclusive fullscreen window that takes over the entire screen of the given monitor.
+        // fullscreen,
     };
 
+    /// The specific state for the given ModeType.
     pub const ModeState = enum {
         /// A standard window state with borders and title bar using the given size.
         normal,
@@ -69,17 +49,18 @@ pub const Window = struct {
         hidden,
     };
 
+    /// The Mode union encapsulates the mode type and its associated state or parameters.
     pub const Mode = union(ModeType) {
         /// A standard window with borders and title bar.
         windowed: ModeState,
-        /// A borderless window that covers the entire screen but is not in exclusive fullscreen mode.
-        borderless: Monitor,
-        /// An exclusive fullscreen window that takes over the entire screen of the given monitor.
-        fullscreen: Monitor,
+        // A borderless window that covers the entire screen but is not in exclusive fullscreen mode.
+        // borderless: Monitor,
+        // An exclusive fullscreen window that takes over the entire screen of the given monitor.
+        // fullscreen: Monitor,
     };
 
     /// Parameters for creation a new window.
-    pub const InitParams = struct {
+    pub const CreateParams = struct {
         /// The mode in which to create the window.
         mode: Mode,
         /// Title of the window.
@@ -89,168 +70,125 @@ pub const Window = struct {
         /// Height of the window in pixels, only used for windowed and borderless modes.
         height: u32,
     };
-
     const HandleT = HandleSet(Internal).Handle;
 
-    /// The actual handle value
-    value: HandleT,
+    const instance = &app.Internal.instance;
 
-    /// Creates a new window with the given initialization parameters.
-    /// Asserts is on main thread
-    pub fn create(params: InitParams) !Window {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    handle: HandleT,
 
-        const handle = try Internal.instance.addOneExact(gpa.Internal.instance);
-        var self = Internal.instance.getPtr(handle);
+    /// Creates a new window with the specified parameters.
+    /// Returns a handle to the created window.
+    /// It will not be visible until `show()` is called, unless the mode is fullscreen.
+    /// It will not be focused until `focus()` is called, unless the mode is fullscreen.
+    /// Asserts that it is called on the main thread.
+    pub fn create(gpa: Allocator, params: CreateParams) !Window {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        self.native = try .create(gpa.Internal.instance, params.title);
-        self.native.setUserData(handle.toInt());
-
-        switch (params.mode) {
-            .windowed => |state| {
-                switch (state) {
-                    .normal => {
-                        self.native.resize(params.width, params.height);
-                        self.native.show();
-                        self.native.focus();
-                    },
-                    .minimized => {
-                        self.native.resize(params.width, params.height);
-                        self.native.minimize();
-                    },
-                    .maximized => {
-                        self.native.resize(params.width, params.height);
-                        self.native.maximize();
-                        self.native.show();
-                        self.native.focus();
-                    },
-                    .hidden => {
-                        self.native.resize(params.width, params.height);
-                        self.native.hide();
-                    },
-                }
-            },
-            .borderless, .fullscreen => |monitor_handle| {
-                const monitor = mntr.Internal.instance.getPtr(monitor_handle.value);
-
-                try switch (params.mode) {
-                    .borderless => self.native.borderless(&monitor.native),
-                    .fullscreen => self.native.fullscreen(&monitor.native),
-                    else => {},
-                };
-
-                self.native.show();
-                self.native.focus();
-            },
-        }
-
-        self.title = try str.Internal.instance.getOrPut(gpa.Internal.instance, params.title);
-        self.width = params.width;
-        self.height = params.height;
+        const handle = try instance.windows.addOneExact(gpa);
+        var self = instance.windows.getPtr(handle);
         self.should_close = false;
+        self.title = try instance.strings.getOrPut(gpa, params.title);
+        self.full = .init(0, 0, @intCast(params.width), @intCast(params.height));
 
-        return .{ .value = handle };
+        try Internal.Impl.create(self, handle, gpa);
+
+        self.full = Internal.Impl.fullRect(self);
+        self.content = Internal.Impl.contentRect(self);
+        self.id = .generate();
+        return .{ .handle = handle };
     }
 
-    /// Destroys the natve window associated with the given handle
-    /// Asserts is on main thread
-    /// Asserts whether handle is valid
-    pub fn destroy(handle: *Window) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Destroys the specified window and releases its resources.
+    /// Asserts that it is called on the main thread.
+    pub fn destroy(window: Window) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        var self = Internal.instance.getPtr(handle.value);
-        self.native.destroy();
-
-        Internal.instance.swapRemove(handle.value);
-
-        handle.value = .none;
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.destroy(self);
+        instance.windows.swapRemove(window.handle);
     }
 
-    /// Returns true if the window has been requested to close.
-    /// Asserts whether handle is valid
-    pub fn shouldClose(self: Window) bool {
-        return Internal.instance.getPtr(self.value).should_close;
+    /// Returns the currently focused window.
+    /// This can be used in combination with input functions to determine which window is receiving input.
+    pub fn focused() Window {
+        return .{ .handle = app.Internal.instance.focused };
     }
 
-    /// Returns the size of the window as a Vec2u32 (width, height).
-    /// Asserts whether handle is valid
-    pub fn getSize(self: Window) core.Vec2u32 {
-        const window = Internal.instance.getPtr(self.value);
-        return .init(window.width, window.height);
+    /// Hides the specified window.
+    /// Asserts that it is called on the main thread.
+    pub fn hide(window: Window) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
+
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.hide(self);
     }
 
-    /// Resizes the given window to new width and height
-    /// Asserts is on main thread
-    /// Asserts handle is valid
-    pub fn resize(self: Window, size: core.Vec2u32) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Shows the specified window.
+    /// Asserts that it is called on the main thread.
+    pub fn show(window: Window) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        const window = Internal.instance.getPtr(self.value);
-        window.native.resize(size.x(), size.y());
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.show(self);
     }
 
-    /// Maximizes the window to fill the screen, without going into fullscreen mode.
-    /// Asserts is on main thread
-    /// Asserts handle is valid
-    pub fn maximize(self: Window) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Maximizes the specified window.
+    /// Asserts that it is called on the main thread.
+    pub fn maximize(window: Window) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        const window = Internal.instance.getPtr(self.value);
-        window.native.maximize();
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.maximize(self);
     }
 
-    /// Restores the window to its previous size and position before being maximized or minimized.
-    /// Asserts is on main thread
-    /// Asserts handle is valid
-    pub fn restore(self: Window) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Restores the specified window from a minimized or maximized state.
+    /// Asserts that it is called on the main thread.
+    pub fn restore(window: Window) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        const window = Internal.instance.getPtr(self.value);
-        window.native.restore();
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.restore(self);
     }
 
-    /// Minimizes the window to the taskbar or dock.
-    /// Asserts is on main thread
-    /// Asserts handle is valid
-    pub fn minimize(self: Window) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Minimizes the specified window.
+    /// Asserts that it is called on the main thread.
+    pub fn minimize(window: Window) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        const window = Internal.instance.getPtr(self.value);
-        window.native.minimize();
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.minimize(self);
     }
 
-    /// Hides the window from view.
-    /// Asserts is on main thread
-    /// Asserts handle is valid
-    pub fn hide(self: Window) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Resizes the specified window to the given width and height.
+    /// Asserts that it is called on the main thread.
+    pub fn resize(window: Window, width: u32, height: u32) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        const window = Internal.instance.getPtr(self.value);
-        window.native.hide();
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.resize(self, width, height);
     }
 
-    /// Shows the window if it is hidden.
-    /// Asserts is on main thread
-    /// Asserts handle is valid
-    pub fn show(self: Window) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Decorates the specified window with borders and title bar.
+    /// Asserts that it is called on the main thread.
+    pub fn decorate(window: Window) !void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        const window = Internal.instance.getPtr(self.value);
-        window.native.show();
+        const self = instance.windows.getPtr(window.handle);
+        try Internal.Impl.decorate(self);
     }
 
-    /// Brings the window to the foreground and gives it focus.
-    /// Asserts is on main thread
-    /// Asserts handle is valid
-    pub fn focus(self: Window) void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
+    /// Focuses the specified window, bringing it to the foreground.
+    /// Asserts that it is called on the main thread.
+    pub fn focus(window: Window) void {
+        asserts.isOnThread(app.Internal.instance.main_thread_id);
 
-        const window = Internal.instance.getPtr(self.value);
-        window.native.focus();
+        const self = instance.windows.getPtr(window.handle);
+        Internal.Impl.focus(self);
     }
 
-    /// Returns whether the handle points to an active window resource or not
-    pub fn isValid(self: Window) bool {
-        return Internal.instance.contains(self.value);
+    /// Returns true if the specified window should close.
+    /// Can be called from any thread but access is not synchronized.
+    pub fn shouldClose(window: Window) bool {
+        return instance.windows.getPtr(window.handle).should_close;
     }
 };

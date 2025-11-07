@@ -2,9 +2,13 @@ const vector = @import("vector.zig");
 const rectangle = @import("rectangle.zig");
 const handle_set = @import("handle_set.zig");
 const ring_buffer = @import("ring_buffer.zig");
+const id = @import("id.zig");
 
 pub const asserts = @import("asserts.zig");
 pub const errors = @import("errors.zig");
+pub const meta = @import("meta.zig");
+
+pub const Id = id.Id;
 
 pub const Vec2 = vector.Vec2;
 pub const Vec3 = vector.Vec3;

@@ -1,57 +1,53 @@
+const std = @import("std");
+const builtin = @import("builtin");
 const core = @import("core");
-const pl = @import("platform");
 const app = @import("app.zig");
-const gpa = @import("gpa.zig");
 const wnd = @import("window.zig");
-const asserts = core.asserts;
-const errors = core.errors;
 
-const Rect = core.Rect;
+const Allocator = std.mem.Allocator;
 const HandleSet = core.HandleSet;
 const Window = wnd.Window;
 
-/// Information about the display properties of a monitor.
-pub const DisplayInfo = pl.DisplayInfo;
-
-/// Errors related to querying or setting monitor properties.
-pub const Error = pl.Monitor.Error;
-
-/// For internal use. Is not exposed through root.zig
 pub const Internal = struct {
-    pub var instance: HandleSet(Internal) = undefined;
+    pub const Impl = switch (builtin.os.tag) {
+        .windows => @import("win32/Monitor.zig"),
+        else => @compileError("Platform not 'yet' supported"),
+    };
 
-    native: pl.Monitor,
+    pub const Id = core.Id(Internal);
+
+    impl: Impl,
+    id: Id,
+    bounds: core.Rect(i32),
     connected: bool,
+};
 
-    pub fn init() !void {
-        instance = .empty;
-    }
+pub const Monitor = struct {
+    const HandleT = HandleSet(Internal).Handle;
 
-    pub fn deinit() void {
-        instance.deinit(gpa.Internal.instance);
-    }
+    const instance = &app.Internal.instance;
 
-    /// Polls the system for connected monitors and updates the internal monitor list.
-    /// If a monitor is newly connected, it is added to the list.
-    /// If a monitor is disconnected, it is marked as such.
-    pub fn poll() !void {
-        var it = pl.Monitor.iterate();
-        var native: pl.Monitor = undefined;
+    handle: HandleT,
+
+    /// Polls the system for connected monitors and updates the internal list.
+    pub fn poll(gpa: Allocator) !void {
+        var it = Internal.Impl.iterate();
+        var monitor: Internal = undefined;
 
         // Mark all existing monitors as disconnected
-        for (Internal.instance.items) |*monitor| {
-            monitor.connected = false;
+        for (instance.monitors.items) |*mntr| {
+            mntr.connected = false;
         }
 
         // Iterate over all connected monitors
         // If a monitor already exists, update its native info and mark it as connected
-        while (it.next(&native)) {
+        while (it.next(&monitor)) {
             var exists = false;
-            for (Internal.instance.items) |*monitor| {
-                if (monitor.native.equals(&native)) {
-                    // Monitor already exists, update native info
-                    monitor.native = native;
-                    monitor.connected = true;
+
+            for (instance.monitors.items) |*mntr| {
+                if (Internal.Impl.equals(mntr, &monitor)) {
+                    // Monitor already exists, info
+                    mntr.* = monitor;
                     exists = true;
                     break;
                 }
@@ -59,110 +55,61 @@ pub const Internal = struct {
 
             if (exists) continue;
 
-            const handle = try Internal.instance.addOneExact(gpa.Internal.instance);
-            const monitor = Internal.instance.getPtr(handle);
-            monitor.native = native;
-            monitor.connected = true;
+            // std.log.info("Monitor: {any}", .{monitor});
+
+            const handle = try instance.monitors.addOneExact(gpa);
+            const new_monitor = instance.monitors.getPtr(handle);
+            new_monitor.* = monitor;
+            new_monitor.id = .generate();
         }
     }
-};
 
-/// Represents a handle to a monitor
-pub const Monitor = struct {
-    const HandleT = HandleSet(Internal).Handle;
+    /// Compares two monitors for equality based on their internal IDs.
+    pub fn equals(a: Monitor, b: Monitor) bool {
+        const ma = instance.monitors.getPtr(a.handle);
+        const mb = instance.monitors.getPtr(b.handle);
+        return ma.id == mb.id;
+    }
 
-    /// The actual handle value
-    value: HandleT,
+    /// Returns true if the specified monitor is currently connected.
+    pub fn isConnected(monitor: Monitor) bool {
+        return instance.monitors.getPtr(monitor.handle).connected;
+    }
 
-    /// Returns the primary monitor handle, meaning the monitor
-    /// at position (0, 0) in a multi-monitor setup.
-    pub fn primary() !Monitor {
-        const handles = try all();
-        const primary_native = try pl.Monitor.primary();
+    /// Returns the bounds of the specified monitor in virtual screen coordinates.
+    pub fn getBounds(monitor: Monitor) core.Rect(i32) {
+        return instance.monitors.getPtr(monitor.handle).bounds;
+    }
 
-        if (searchByNative(handles, primary_native)) |found| {
-            return found;
+    /// Returns the primary monitor (the one at position 0,0).
+    pub fn primary() ?Monitor {
+        if (instance.monitors.count == 0) {
+            return null;
         }
-
-        return handles[0];
-    }
-
-    /// Returns the monitor handle that is closest to the given window.
-    pub fn closest(handle: Window) !Monitor {
-        const handles = try all();
-        const window = wnd.Internal.instance.getPtr(handle.value);
-        const closest_native = try pl.Monitor.closest(&window.native);
-
-        if (searchByNative(handles, closest_native)) |found| {
-            return found;
-        }
-
-        return handles[0];
-    }
-
-    /// Returns all monitor handles connected to the system.
-    pub fn all() ![]Monitor {
-        if (Internal.instance.count == 0) {
-            try Internal.poll();
-        }
-
-        try errors.throwIfZero(Internal.instance.count, error.MonitorNotFound, "No monitors found");
-
-        return Internal.instance.handlesTo(Monitor);
-    }
-
-    /// Returns true if the monitor is currently connected.
-    pub fn isConnected(self: Monitor) bool {
-        const monitor = Internal.instance.getPtr(self.value);
-        return monitor.connected;
-    }
-
-    /// Returns the work area of the monitor, excluding taskbars and docked windows.
-    /// Returns error if given monitor is not found
-    pub fn getWorkArea(self: Monitor) Error!Rect(i32) {
-        asserts.isOnThread(app.Internal.instance.main_thread);
-
-        const monitor = Internal.instance.getPtr(self.value);
-        return monitor.native.getWorkArea();
-    }
-
-    /// Returns the full area of the monitor, including taskbars and docked windows.
-    /// Returns error if given monitor is not found
-    pub fn getFullArea(self: Monitor) Error!Rect(i32) {
-        asserts.isOnThread(app.Internal.instance.main_thread);
-
-        const monitor = Internal.instance.getPtr(self.value);
-        return monitor.native.getFullArea();
-    }
-
-    /// Returns the display information of the monitor, including size and refresh rate.
-    /// Returns error if given monitor is not found
-    pub fn getDisplayInfo(self: Monitor) Error!DisplayInfo {
-        asserts.isOnThread(app.Internal.instance.main_thread);
-
-        const monitor = Internal.instance.getPtr(self.value);
-        return monitor.native.getDisplayInfo();
-    }
-
-    /// Sets the display size of the monitor.
-    /// Returns error if given monitor is not found
-    pub fn setDisplaySize(self: Monitor, size: core.Vec2u32) Error!void {
-        asserts.isOnThread(app.Internal.instance.main_thread);
-
-        const monitor = Internal.instance.getPtr(self.value);
-        return monitor.native.setDisplaySize(size);
-    }
-
-    fn searchByNative(values: []const Monitor, needle: anytype) ?Monitor {
-        for (values) |handle| {
-            const monitor = Internal.instance.getPtr(handle.value);
-            if (monitor.native.equals(needle)) {
+        for (instance.monitors.handlesTo(Monitor), instance.monitors.items) |handle, *mntr| {
+            if (mntr.bounds.position.x() == 0 and mntr.bounds.position.y() == 0) {
                 return handle;
             }
         }
-        return null;
+
+        return .{ .handle = .fromRaw(instance.monitors.dense[0]) };
     }
-    pub fn isValid(self: Monitor) bool {
-        return Internal.instance.contains(self.value);
+
+    /// Returns the monitor that is closest to the specified window.
+    /// Closest is determined by the largest overlapping area.
+    pub fn closest(handle: Window) ?Monitor {
+        const window = app.Internal.instance.windows.getPtr(handle.handle);
+        var best_monitor: ?Monitor = null;
+        var best_area: i32 = 0;
+
+        for (app.Internal.instance.monitors.handlesTo(Monitor), app.Internal.instance.monitors.items) |monitor_handle, *monitor| {
+            const area = window.full.intersection(monitor.bounds);
+            if (area > best_area) {
+                best_area = area;
+                best_monitor = monitor_handle;
+            }
+        }
+
+        return best_monitor;
     }
 };

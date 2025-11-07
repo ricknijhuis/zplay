@@ -33,7 +33,51 @@ pub fn Rect(comptime T: type) type {
         pub inline fn height(self: Self) T {
             return self.size.y();
         }
+
+        pub fn min(self: Self) Vec2 {
+            return self.position;
+        }
+
+        pub fn max(self: Self) Vec2 {
+            return .init(self.x() + self.width(), self.y() + self.height());
+        }
+
+        pub fn intersection(self: Self, other: Self) Vec2.ScalarT {
+            const min_pos = @max(self.min().data, other.min().data);
+            const max_pos = @min(self.max().data, other.max().data);
+            const size = @max(Vec2.VectorT{ 0, 0 }, max_pos - min_pos);
+            return @reduce(.Mul, size);
+        }
     };
+}
+test "Rect: intersection full overlap" {
+    const a: Rect(i32) = .init(0, 0, 10, 10);
+    const b: Rect(i32) = .init(0, 0, 10, 10);
+    try std.testing.expectEqual(@as(i32, 100), a.intersection(b));
+}
+
+test "Rect: intersection partial overlap" {
+    const a: Rect(i32) = .init(0, 0, 10, 10);
+    const b: Rect(i32) = .init(5, 5, 10, 10);
+    try std.testing.expectEqual(@as(i32, 25), a.intersection(b));
+}
+
+test "Rect: intersection edge touch" {
+    const a: Rect(i32) = .init(0, 0, 10, 10);
+    const b: Rect(i32) = .init(10, 0, 10, 10);
+    try std.testing.expectEqual(@as(i32, 0), a.intersection(b));
+}
+
+test "Rect: intersection no overlap" {
+    const a: Rect(i32) = .init(0, 0, 10, 10);
+    const b: Rect(i32) = .init(20, 20, 5, 5);
+    try std.testing.expectEqual(@as(i32, 0), a.intersection(b));
+}
+
+test "Rect: intersection contained rect" {
+    const a: Rect(i32) = .init(0, 0, 10, 10);
+    const b: Rect(i32) = .init(2, 2, 4, 4);
+    try std.testing.expectEqual(@as(i32, 16), a.intersection(b));
 }
 
 test "Rect: initialization and accessors" {

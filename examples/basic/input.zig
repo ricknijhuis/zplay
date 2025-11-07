@@ -4,14 +4,15 @@ const zp = @import("zplay");
 const Io = std.Io;
 
 pub fn main() !void {
+    var debug_allocator = std.heap.DebugAllocator(.{}){};
+    defer _ = debug_allocator.deinit();
+    const gpa = debug_allocator.allocator();
     // Initialize the ZPlay application
     // If no allocator is provided, the default allocator will be used (SmpAllocator in release modes or DebugAllocator in debug mode)
-    try zp.App.init(.{});
-    defer zp.App.deinit();
+    try zp.App.init(gpa);
+    defer zp.App.deinit(gpa);
 
-    const allocator = zp.App.allocator();
-
-    var threaded: Io.Threaded = .init(allocator);
+    var threaded: Io.Threaded = .init(gpa);
     defer threaded.deinit();
 
     const io = threaded.io();
@@ -33,7 +34,7 @@ pub fn main() !void {
     // Checks for window close event in a loop, generally best to do this on your 'main' window.
     while (!window.shouldClose()) {
         // Polls for events for registered devices. Currently only window events are handled. See input.zig for input device event handling.
-        try zp.Event.poll();
+        try zp.Platform.pollEvents();
 
         // Check if the last reported state of the given key is down
         if (keyboard.isKeyDown(.escape)) {

@@ -3,9 +3,11 @@ const rt = @import("runtime");
 
 pub const App = rt.App;
 pub const Window = rt.Window;
+pub const Platform = rt.Platform;
 pub const Monitor = rt.Monitor;
-pub const Event = rt.Event;
 pub const Keyboard = rt.Keyboard;
+// pub const Event = rt.Event;
+// pub const Keyboard = rt.Keyboard;
 
 // pub const app = runtime.app;
 // pub const window = runtime.window;

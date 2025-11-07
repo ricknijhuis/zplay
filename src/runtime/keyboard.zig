@@ -1,263 +1,216 @@
+/// We have 2 seperate keyboard implementations, one that supports identifying multiple keyboards
+/// and one that only supports a single keyboard.
+/// This does NOT mean that the single keyboard implementation cannot handle multiple keyboards, only that the developer cannot
+/// distinguish between them. For obvious reasons the multi keyboard support is more complex and thus has a small overhead.
 const std = @import("std");
+const builtin = @import("builtin");
 const core = @import("core");
-const pl = @import("platform");
-const gpa = @import("gpa.zig");
+const app = @import("app.zig");
 const opt = @import("options.zig");
-const debug = std.debug;
+const meta = core.meta;
 
-const HandleSet = core.HandleSet;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const Allocator = std.mem.Allocator;
 const EnumArray = std.EnumArray;
+
+const instance = &app.Internal.instance;
 
 fn InternalImpl(comptime multi_input_device_support: bool) type {
     if (multi_input_device_support) {
-        debug.assert(opt.keyboard_filter_size != 0);
+        return InternalMultipleDevicesImpl;
+    } else {
+        return InternalSingleDeviceImpl;
+    }
+}
 
-        return struct {
-            const Self = @This();
+const Impl = switch (builtin.os.tag) {
+    .windows => @import("win32/Keyboard.zig"),
+    else => @compileError("Platform not 'yet' supported"),
+};
 
-            pub var instance: HandleSet(Self) = undefined;
+const ScancodeIndexer = std.enums.EnumIndexer(Impl.Scancode);
+const KeyIndexer = std.enums.EnumIndexer(KeyboardKey);
 
-            pub const Id = enum(u64) {
-                none = 0,
-                _,
+// Internal representation of keyboards, supports multiple devices
+const InternalMultipleDevicesImpl = struct {
+    pub const Id = core.Id(InternalMultipleDevicesImpl);
 
-                pub fn fromInt(value: anytype) Id {
-                    return @as(Id, @enumFromInt(value));
-                }
-            };
-            filter_buffer: [opt.keyboard_filter_size]Id,
-            filter_count: u32,
-            state: EnumArray(Keyboard.Key, Keyboard.Key.State),
+    filter_buffer: [opt.keyboard_filter_size]Id,
+    filter_count: usize,
+    state: EnumArray(Keyboard.Key, KeyboardKeyState),
 
-            pub fn init() !void {
-                instance = .empty;
+    pub fn reset() void {
+        for (instance.keyboards.items) |*kbd| {
+            for (kbd.state.values) |*state| {
+                state.reset();
             }
+        }
+    }
 
-            pub fn deinit() void {
-                instance.deinit(gpa.Internal.instance);
-            }
+    pub fn process(key: Keyboard.Key, down: bool) void {
+        for (instance.keyboards.items) |*kbd| {
+            kbd.state.getPtr(key).update(down);
+        }
+    }
 
-            pub fn process(keyboard: pl.Keyboard, scancode: pl.Keyboard.Scancode, down: bool) void {
-                for (instance.items) |*kbd| {
-                    if (kbd.filter_count == 0) {
-                        const key_state = if (down) Keyboard.Key.State.down else Keyboard.Key.State.up;
-                        kbd.state.set(@as(Keyboard.Key, @enumFromInt(scancode_indexer.indexOf(scancode))), key_state);
-                    } else {
-                        for (kbd.filter_buffer[0..kbd.filter_count]) |id| {
-                            if (id == .none or id == Id.fromInt(keyboard.getId())) {
-                                const key_state = if (down) Keyboard.Key.State.down else Keyboard.Key.State.up;
-                                kbd.state.set(@as(Keyboard.Key, @enumFromInt(scancode_indexer.indexOf(scancode))), key_state);
-                            }
-                        }
+    pub fn processFiltered(keyboard: Id, key: Keyboard.Key, down: bool) void {
+        for (instance.keyboards.items) |*kbd| {
+            if (kbd.filter_count == 0) {
+                kbd.state.getPtr(key).update(down);
+            } else {
+                for (kbd.filter_buffer[0..kbd.filter_count]) |id| {
+                    if (id == .none or id == keyboard) {
+                        kbd.state.getPtr(key).update(down);
                     }
                 }
             }
-        };
-    } else {
-        return struct {
-            const Self = @This();
-
-            pub var instance: HandleSet(Self) = undefined;
-
-            state: EnumArray(Keyboard.Key, Keyboard.Key.State),
-
-            pub fn init() !void {
-                instance = .empty;
-            }
-
-            pub fn deinit() void {
-                Internal.instance.deinit(gpa.Internal.instance);
-            }
-
-            pub fn process(keyboard: pl.Keyboard, scancode: pl.Keyboard.Scancode, down: bool) void {
-                // TODO: Might be improved by instead of looping just always get the first item as there is only one keyboard instance
-                // Keyboard.init should ensure there is always one instance
-                _ = keyboard;
-                for (instance.items) |*kbd| {
-                    const key_state = if (down) Keyboard.Key.State.down else Keyboard.Key.State.up;
-                    kbd.state.set(@as(Keyboard.Key, @enumFromInt(scancode_indexer.indexOf(scancode))), key_state);
-                }
-            }
-        };
+        }
     }
-}
+};
+
+// Internal representation of keyboards, supports single device only
+const InternalSingleDeviceImpl = struct {
+    pub const Id = core.Id(InternalSingleDeviceImpl);
+
+    state: EnumArray(Keyboard.Key, KeyboardKeyState),
+
+    pub fn process(key: Keyboard.Key, down: bool) void {
+        instance.keyboards.items[0].state.getPtr(key).update(down);
+    }
+    pub fn reset() void {
+        for (instance.keyboards.items[0].state.values[0..]) |*state| {
+            state.reset();
+        }
+    }
+};
 
 fn KeyboardImpl(comptime multi_input_device_support: bool) type {
     if (multi_input_device_support) {
-        return struct {
-            const Self = @This();
-
-            pub const Id = Internal.Id;
-            pub const Key = KeyboardKey;
-
-            const HandleT = HandleSet(Internal).Handle;
-
-            /// The actual handle value
-            value: HandleT,
-
-            /// Initializes a keyboard and returns a handle to it. This is a virtual representation and not
-            /// linked to any hardware. If you want the keyboard to process data of specific hardware use the filter method
-            /// Keys are initialized with all keys in .up state.
-            pub fn init() !Self {
-                const handle = try Internal.instance.addOneExact(gpa.Internal.instance);
-                const keyboard = Internal.instance.getPtr(handle);
-
-                keyboard.filter_buffer = undefined;
-                keyboard.filter_count = 0;
-                keyboard.state = .initFill(.up);
-
-                return .{ .value = handle };
-            }
-
-            /// Resets key state to be in up position
-            /// Asserts whether handle is valid
-            /// Asserts whether handle is valid
-            pub fn reset(self: Self) void {
-                var keyboard = Internal.instance.getPtr(self.value);
-                keyboard.state = .initFill(.up);
-            }
-
-            /// Adds a device id to the filter, from now on only input comming from devices in the filter will be processed.
-            /// The Id is linked to an actual hardware device.
-            /// Asserts whether handle is valid
-            pub fn filter(self: Self, id: Id) void {
-                var keyboard = Internal.instance.getPtr(self.value);
-                debug.assert(keyboard.filter_count < keyboard.filter_buffer.len);
-                keyboard.filter_buffer[keyboard.filter_count] = id;
-                keyboard.filter_count += 1;
-            }
-
-            /// Returns the list of current devices that are filtered.
-            /// Asserts whether handle is valid
-            pub fn filters(self: Self) []Id {
-                const keyboard = Internal.instance.getPtr(self.value);
-                return keyboard.filter_buffer[0..keyboard.filter_count];
-            }
-
-            /// Checks if last known state of given key is down
-            /// Asserts whether handle is valid
-            pub fn isKeyDown(self: Self, key: Key) bool {
-                var keyboard = Internal.instance.getPtr(self.value);
-                return keyboard.state.get(@as(Keyboard.Key, key)) == .down;
-            }
-
-            /// Checks if last know state of given key is up
-            /// Asserts whether handle is valid
-            pub fn isKeyUp(self: Self, key: Key) bool {
-                return !self.isKeyDown(key);
-            }
-
-            /// Free's any resources and invalidates the handle
-            /// Asserts whether handle is valid
-            pub fn deinit(self: *Self) void {
-                Internal.instance.swapRemove(self.value);
-                self.value = .none;
-            }
-
-            /// Returns whether the handle points to a valid resource
-            pub fn isValid(self: Self) bool {
-                return Internal.instance.contains(self.value);
-            }
-
-            /// Returns the platforms specific scancode
-            pub fn getScancode(key: Key) pl.Keyboard.Scancode {
-                return @enumFromInt(key_indexer.indexOf(key));
-            }
-        };
+        return KeyboardMultipleDevices;
     } else {
-        return struct {
-            const Self = @This();
-
-            pub const Key = KeyboardKey;
-
-            const HandleT = HandleSet(Internal).Handle;
-
-            /// The actual handle value
-            value: HandleT,
-
-            /// Initializes a keyboard and returns a handle to it. This is a virtual representation and not
-            /// linked to any hardware.
-            /// Keys are initialized with all keys in .up state.
-            pub fn init() !Self {
-                const handle = try Internal.instance.addOneExact(gpa.Internal.instance);
-                const keyboard = Internal.instance.getPtr(handle);
-
-                keyboard.state = .initFill(.up);
-
-                return .{ .value = handle };
-            }
-
-            /// Resets key state to be in up position
-            /// Asserts whether handle is valid
-            pub fn reset(self: Self) void {
-                var keyboard = Internal.instance.getPtr(self.value);
-                keyboard.state = .initFill(.up);
-            }
-
-            /// Checks if last known state of given key is down
-            /// Asserts whether handle is valid
-            pub fn isKeyDown(self: Self, key: Key) bool {
-                var keyboard = Internal.instance.getPtr(self.value);
-                return keyboard.state.get(@as(Keyboard.Key, key)) == .down;
-            }
-
-            /// Checks if last know state of given key is up
-            /// Asserts whether handle is valid
-            pub fn isKeyUp(self: Self, key: Key) bool {
-                return !self.isKeyDown(key);
-            }
-
-            /// Free's any resources and invalidates the handle
-            /// Asserts whether handle is valid
-            pub fn deinit(self: *Self) void {
-                Internal.instance.swapRemove(self.value);
-                self.value = .none;
-            }
-
-            pub fn isValid(self: Self) bool {
-                return Internal.instance.contains(self.value);
-            }
-
-            /// Returns the platforms specific scancode
-            pub fn getScancode(key: Key) pl.Keyboard.Scancode {
-                return @enumFromInt(key_indexer.indexOf(key));
-            }
-        };
+        return KeyboardSingleDevice;
     }
 }
 
-/// For internal use. Is not exposed through root.zig
-pub const Internal = InternalImpl(opt.multi_input_device_support);
+fn SharedKeyboardImpl(comptime Self: type) type {
+    return struct {
+        pub const Key = KeyboardKey;
+        /// Returns true if the specified key is currently held down
+        pub fn isKeyDown(self: Self, key: Key) bool {
+            const keyboard = instance.keyboards.getPtr(self.handle);
+            return keyboard.state.get(key).down;
+        }
 
-/// Handle to a virtual representation of a keyboard
-/// If root defines 'multi_input_device_support = true', filter methods will be allowed
-/// to only receive events of given hardware
+        /// Returns true if the specified key is currently up
+        pub fn isKeyUp(self: Self, key: Key) bool {
+            const keyboard = instance.keyboards.getPtr(self.handle);
+            return !keyboard.state.get(key).down;
+        }
+
+        /// Returns true if the specified key was pressed this frame
+        pub fn isKeyPressed(self: Self, key: Key) bool {
+            const keyboard = instance.keyboards.getPtr(self.handle);
+            const state = keyboard.state.get(key);
+            return state.down and state.transitioned;
+        }
+
+        /// Returns true if the specified key was released this frame
+        pub fn isKeyReleased(self: Self, key: Key) bool {
+            const keyboard = instance.keyboards.getPtr(self.handle);
+            const state = keyboard.state.get(key);
+            return !state.down and state.transitioned;
+        }
+    };
+}
+
+const KeyboardMultipleDevices = struct {
+    pub const Key = KeyboardKey;
+    const HandleT = core.HandleSet(Internal).Handle;
+
+    handle: HandleT,
+
+    /// Initializes a new keyboard instance, returns a handle to it.
+    /// All keys are initialized to the 'up' state.
+    /// After this call the keyboard will receive input as soon as platform.pollEvents is called.
+    pub fn init(gpa: Allocator) !KeyboardMultipleDevices {
+        const handle = try instance.keyboards.addOne(gpa);
+        const keyboard = instance.keyboards.getPtr(handle);
+
+        keyboard.state = .initFill(.up);
+        keyboard.filter_count = 0;
+        keyboard.filter_buffer = undefined;
+
+        return .{ .value = handle };
+    }
+
+    pub const isKeyDown = SharedKeyboardImpl(KeyboardMultipleDevices).isKeyDown;
+    pub const isKeyUp = SharedKeyboardImpl(KeyboardMultipleDevices).isKeyUp;
+    pub const isKeyPressed = SharedKeyboardImpl(KeyboardMultipleDevices).isKeyPressed;
+    pub const isKeyReleased = SharedKeyboardImpl(KeyboardMultipleDevices).isKeyReleased;
+};
+
+const KeyboardSingleDevice = struct {
+    pub const Key = KeyboardKey;
+    const HandleT = core.HandleSet(Internal).Handle;
+
+    handle: HandleT,
+
+    /// Initializes a new keyboard instance, returns a handle to it.
+    /// All keys are initialized to the 'up' state.
+    /// After this call the keyboard will receive input as soon as platform.pollEvents is called.
+    pub fn init(gpa: Allocator) !KeyboardSingleDevice {
+        const handle = try instance.keyboards.addOne(gpa);
+        const keyboard = instance.keyboards.getPtr(handle);
+
+        keyboard.state = .initFill(.up);
+
+        return .{ .handle = handle };
+    }
+};
+
+pub const Internal = InternalImpl(opt.multi_input_device_support);
 pub const Keyboard = KeyboardImpl(opt.multi_input_device_support);
 
-const scancode_indexer = std.enums.EnumIndexer(pl.Keyboard.Scancode);
-const key_indexer = std.enums.EnumIndexer(KeyboardKey);
+/// Represents the last known state of a key, mainly used internally.
+pub const KeyboardKeyState = packed struct(u8) {
+    /// If set the key is currently held down
+    down: bool,
+    /// If set the key state has changed at least once during the frame
+    /// This allows to detect key presses and releases
+    transitioned: bool,
+    _: u6 = 0,
+
+    /// The default 'up' state of a key.
+    pub const up: KeyboardKeyState = .{
+        .down = false,
+        .transitioned = false,
+    };
+
+    /// Resets the transitioned state of the key.
+    pub fn reset(self: *KeyboardKeyState) void {
+        self.transitioned = false;
+    }
+
+    /// Updates the key state based on whether it is currently down or up.
+    /// using the previous state to determine if a transition has occurred.
+    fn update(self: *KeyboardKeyState, down: bool) void {
+        if (down) {
+            if (!self.down) {
+                self.down = true;
+                self.transitioned = true;
+            }
+        } else {
+            if (self.down) {
+                self.down = false;
+                self.transitioned = true;
+            }
+        }
+    }
+};
 
 /// These keys are based on the US keyboard layout and don't change with different layouts.
 /// They act as physical key identifiers(Scancodes). And thus are safe to use for keybindings.
 /// On US layout key key W returns Key.w while on Azerty layout key Z returns Key.w
 const KeyboardKey = enum(u32) {
-    /// Represents the last known state of a key
-    pub const State = enum(u8) {
-        /// Key is up
-        up = 1,
-        /// Key is down
-        down = 2,
-    };
-
-    /// Represents a user action on a key
-    pub const Action = enum(u8) {
-        /// Key was pressed
-        press,
-        /// Key was released
-        release,
-    };
-
     escape,
     @"1",
     @"2",
@@ -412,4 +365,6 @@ const KeyboardKey = enum(u32) {
     launch_email,
     launch_media,
     pause,
+
+    pub const last = meta.enums.greatest(KeyboardKey);
 };

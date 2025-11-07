@@ -6,7 +6,7 @@ const Io = std.Io;
 pub fn main() !void {
     // Initialize the ZPlay application
     // If no allocator is provided, the default allocator will be used (SmpAllocator in release modes or DebugAllocator in debug mode)
-    try zp.App.init(.{});
+    try zp.App.init();
     defer zp.App.deinit();
 
     const allocator = zp.App.allocator();

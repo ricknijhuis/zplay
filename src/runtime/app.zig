@@ -1,73 +1,53 @@
 const std = @import("std");
-const pl = @import("platform");
-const gpa = @import("gpa.zig");
-const str = @import("strings.zig");
+const core = @import("core");
 const wnd = @import("window.zig");
 const mntr = @import("monitor.zig");
-const evnt = @import("event.zig");
-const opt = @import("options.zig");
-const kbd = @import("keyboard.zig");
+const pl = @import("platform.zig");
+const kb = @import("keyboard.zig");
+const asserts = core.asserts;
 
+const Allocator = std.mem.Allocator;
+const HandleSet = core.HandleSet;
+const StringTable = core.StringTable;
 const Thread = std.Thread;
 
 pub const Internal = struct {
     pub var instance: Internal = undefined;
 
-    main_thread: Thread.Id,
+    main_thread_id: Thread.Id,
+    strings: StringTable,
+    platform: pl.Internal,
+    focused: HandleSet(wnd.Internal).Handle,
+    windows: HandleSet(wnd.Internal),
+    monitors: HandleSet(mntr.Internal),
+    keyboards: HandleSet(kb.Internal),
+    // display_modes: HandleSet(mntr.DisplayMode),
 };
 
 pub const App = struct {
-    /// Parameters for initializing the global context.
-    pub const InitParams = struct {
-        allocator: ?std.mem.Allocator = null,
-    };
+    pub fn init(gpa: Allocator) !void {
+        Internal.instance.main_thread_id = Thread.getCurrentId();
+        Internal.instance.strings = .empty;
+        Internal.instance.windows = .empty;
+        Internal.instance.monitors = .empty;
+        Internal.instance.focused = .none;
 
-    pub fn init(params: InitParams) !void {
-        Internal.instance = .{
-            .main_thread = Thread.getCurrentId(),
-        };
+        try pl.Internal.init();
 
-        try gpa.Internal.init(params.allocator);
-        try str.Internal.init();
-        try evnt.Internal.init();
-        try mntr.Internal.init();
-        try wnd.Internal.init();
-
-        pl.callbacks.onClose = onCloseCallback;
-        pl.callbacks.onDisplayChange = onDisplayChangeCallback;
-        pl.callbacks.onKeyboardEvent = onKeyboardEventCallback;
+        try mntr.Monitor.poll(gpa);
     }
+    pub fn deinit(gpa: Allocator) void {
+        asserts.isOnThread(Internal.instance.main_thread_id);
 
-    pub fn deinit() void {
-        wnd.Internal.deinit();
-        mntr.Internal.deinit();
-        kbd.Internal.deinit();
-        evnt.Internal.deinit();
-        str.Internal.deinit();
-        gpa.Internal.deinit();
-    }
+        for (Internal.instance.windows.items) |*window| {
+            wnd.Internal.Impl.destroy(window);
+        }
 
-    pub fn allocator() std.mem.Allocator {
-        return gpa.Internal.instance;
+        pl.Internal.deinit();
+
+        Internal.instance.keyboards.deinit(gpa);
+        Internal.instance.windows.deinit(gpa);
+        Internal.instance.monitors.deinit(gpa);
+        Internal.instance.strings.deinit(gpa);
     }
 };
-
-pub fn onCloseCallback(window: pl.Window) void {
-    const handle: wnd.Window = .{ .value = .fromInt(window.getUserData(u32)) };
-    const ptr = wnd.Internal.getPtr(handle);
-    ptr.should_close = true;
-}
-
-pub fn onDisplayChangeCallback() void {
-    // TODO: Handle error?
-    mntr.Internal.poll() catch {};
-}
-
-pub fn onKeyboardEventCallback(keyboard: pl.Keyboard, scancode: pl.Keyboard.Scancode, down: bool) void {
-    kbd.Internal.process(keyboard, scancode, down);
-
-    if (comptime opt.multi_input_device_support) {
-        // TODO: Handle error?
-        evnt.Internal.pushEventDevice(.{ .keyboard = kbd.Keyboard.Id.fromInt(keyboard.getId()) });
-    }
-}
