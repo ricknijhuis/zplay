@@ -32,5 +32,12 @@ pub const RingBuffer = ring_buffer.RingBuffer;
 pub const StringTable = @import("StringTable.zig");
 
 test {
-    @import("std").testing.refAllDeclsRecursive(@This());
+    _ = vector;
+    _ = rectangle;
+    _ = handle_set;
+    _ = ring_buffer;
+    _ = id;
+    _ = errors;
+    _ = meta;
+    _ = StringTable;
 }

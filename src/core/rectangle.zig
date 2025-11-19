@@ -8,45 +8,48 @@ pub fn Rect(comptime T: type) type {
         const Self = @This();
         const Vec2 = core.Vec2(T);
 
-        position: Vec2,
-        size: Vec2,
+        /// Position on the x axis of the top left corner of the rectangle
+        x: T,
+        /// Position on the y axis of the top left corner of the rectangle
+        y: T,
+        /// Width of the rectangle
+        width: T,
+        /// Height of the rectangle
+        height: T,
 
-        pub fn init(pos_x: T, pos_y: T, size_width: T, size_height: T) Self {
+        pub fn init(pos_x: T, pos_y: T, width: T, height: T) Self {
             return .{
                 .position = .init(pos_x, pos_y),
-                .size = .init(size_width, size_height),
+                .size = .init(width, height),
             };
         }
 
-        pub inline fn x(self: Self) T {
-            return self.position.x();
+        /// Returns the width and height in a vec2
+        pub fn size(self: Self) Vec2 {
+            return .init(self.width, self.height);
         }
 
-        pub inline fn y(self: Self) T {
-            return self.position.y();
+        /// Returns the x and y in a vec2
+        pub fn position(self: Self) Vec2 {
+            return self.min();
         }
 
-        pub inline fn width(self: Self) T {
-            return self.size.x();
-        }
-
-        pub inline fn height(self: Self) T {
-            return self.size.y();
-        }
-
+        /// Returns the x and y in a vec2
         pub fn min(self: Self) Vec2 {
-            return self.position;
+            return .init(self.x, self.y);
         }
 
+        /// Returns the x and y of the bottom right corner of the rectangle
         pub fn max(self: Self) Vec2 {
-            return .init(self.x() + self.width(), self.y() + self.height());
+            return .init(self.x + self.width, self.y + self.height);
         }
 
-        pub fn intersection(self: Self, other: Self) Vec2.ScalarT {
+        /// Returns the area that one rect intersects with the other
+        pub fn intersection(self: Self, other: Self) T {
             const min_pos = @max(self.min().data, other.min().data);
             const max_pos = @min(self.max().data, other.max().data);
-            const size = @max(Vec2.VectorT{ 0, 0 }, max_pos - min_pos);
-            return @reduce(.Mul, size);
+            const full_size = @max(Vec2.VectorT{ 0, 0 }, max_pos - min_pos);
+            return @reduce(.Mul, full_size);
         }
     };
 }
